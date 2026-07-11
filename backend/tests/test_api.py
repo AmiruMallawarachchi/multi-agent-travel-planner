@@ -132,6 +132,32 @@ class TestSseBridge:
         assert {"type": "token", "content": "hello"} in events
         assert events[-1] == {"type": "done"}
 
+    def test_stream_normalizes_frontend_friendly_events(self, monkeypatch):
+        fake_graph = FakeGraph(
+            [
+                {"event": "on_tool_start", "name": ""},
+                {
+                    "event": "on_chat_model_stream",
+                    "data": {"chunk": type("Chunk", (), {"content": [{"text": "hel"}, "lo"]})()},
+                },
+                {"event": "unknown_event"},
+            ]
+        )
+        monkeypatch.setattr(main, "graph", fake_graph)
+        client = _client(monkeypatch)
+
+        response = client.post(
+            "/chat/stream",
+            headers={"X-API-Key": "test-key"},
+            json={"message": "find hotels"},
+        )
+
+        assert response.status_code == 200
+        events = _events(response.text)
+        assert {"type": "tool", "status": "INVOKED", "tool": "tool"} in events
+        assert {"type": "token", "content": "hello"} in events
+        assert events[-1] == {"type": "done"}
+
     def test_stream_turns_graph_exception_into_error_event(self, monkeypatch):
         fake_graph = FakeGraph(exc=RuntimeError("boom"))
         monkeypatch.setattr(main, "graph", fake_graph)
@@ -148,3 +174,4 @@ class TestSseBridge:
         assert events[0]["type"] == "session"
         assert events[1]["type"] == "error"
         assert "Something went wrong" in events[1]["message"]
+        assert events[-1] == {"type": "done"}

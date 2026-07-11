@@ -68,6 +68,23 @@ def _free(value: str = "") -> dict:
     return gr.update(value=value, interactive=True)
 
 
+def _tool_label(tool_name: str, status: str) -> str:
+    pretty_tool = (tool_name or "service").replace("_", " ")
+    if status == "INVOKED":
+        if "book" in tool_name:
+            return "confirming simulated booking"
+        if "search" in tool_name or "list" in tool_name:
+            return "searching live availability"
+        return f"using {pretty_tool}"
+    if status == "SUCCEEDED":
+        if "book" in tool_name:
+            return "booking confirmation received"
+        return f"{pretty_tool} responded"
+    if status == "FAILED":
+        return f"{pretty_tool} unavailable - recovering"
+    return "working on it"
+
+
 async def stream_turn(message: str, history: list, session_id: str | None):
     """The one function every send path (button, Enter, quick-reply chips)
     calls. An async generator: each yield pushes a fresh frame to the UI as
@@ -110,9 +127,10 @@ async def stream_turn(message: str, history: list, session_id: str | None):
                         label = ACTIVITY_LABELS.get(event.get("state"), str(event.get("state", "")))
                         yield history, ticker_html(label), session_id, _busy(), gr.update(interactive=False)
 
-                    elif etype == "tool" and event.get("status") == "FAILED":
+                    elif etype == "tool":
                         tool = event.get("tool", "a service")
-                        yield history, ticker_html(f"{tool} unavailable — recovering"), session_id, _busy(), gr.update(interactive=False)
+                        status = event.get("status", "")
+                        yield history, ticker_html(_tool_label(tool, status)), session_id, _busy(), gr.update(interactive=False)
 
                     elif etype == "token":
                         assistant_text += event.get("content", "")
