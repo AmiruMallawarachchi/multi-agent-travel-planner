@@ -157,10 +157,11 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    `sanitize_user_message` → `validate_session_id` (mint one via
    `new_session_id()` if none supplied) → builds `inputs` for the graph.
 3. `graph.astream_events(inputs, config={"configurable": {"thread_id": session_id}}, version="v2")`
-   drives the whole turn; `main.py` translates events to SSE:
+   drives the whole turn; `main.py` always starts the SSE stream with
+   `{"type": "session", "session_id": ...}` and translates graph events:
    - `on_chain_start` for a known node name → `{"type": "status", "state": ...}`
-   - `on_tool_start` / `on_tool_end` / `on_tool_error` → `{"type": "tool", ...}`
-   - `on_chat_model_stream` → `{"type": "token", "content": ...}`
+   - `on_tool_start` / `on_tool_end` / `on_tool_error` → `{"type": "tool", "status": "INVOKED|SUCCEEDED|FAILED", ...}`
+   - `on_chat_model_stream` → `{"type": "token", "content": ...}` with provider-specific chunk shapes normalized to plain text
 4. Inside the graph: `classify_intent` → conditional edge
    (`route_from_intent`) → one of `general_qa_node` / `hotel_node` /
    `flight_node` / `clarify_node` → `END`.
@@ -168,10 +169,12 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    → bind → up to `MAX_TOOL_ROUNDS` rounds of (LLM decides → tool call,
    fenced + recorded → LLM sees result) → final answer.
 6. Any exception anywhere in step 3–5 is caught by `main.py`'s top-level
-   try/except and turned into `{"type": "error", "message": "..."}` — the
-   generator still completes cleanly, the app never crashes.
+   try/except and turned into `{"type": "error", "message": "..."}` followed
+   by `{"type": "done"}` — the generator still completes cleanly, the app
+   never crashes.
 7. Frontend renders tokens into the last chat message live, and the
-   ticker (`theme.ticker_html`) reflects the latest `status`/`tool` event.
+   ticker (`theme.ticker_html`) reflects routing status plus every tool
+   `INVOKED` / `SUCCEEDED` / `FAILED` event.
 
 ---
 
