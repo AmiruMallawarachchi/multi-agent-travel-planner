@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+load_dotenv()
 
 from amadeus_client import (
     AmadeusError,
@@ -21,6 +26,11 @@ from amadeus_client import (
 )
 
 mcp = FastMCP("flight-mcp")
+
+
+@mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+async def health(_request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "service": "flight-mcp"})
 
 
 @mcp.tool()

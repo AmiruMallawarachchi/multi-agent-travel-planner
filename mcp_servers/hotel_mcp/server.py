@@ -15,11 +15,21 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+load_dotenv()
 
 from amadeus_client import AmadeusError, InvalidInputError, book_hotel_offer, list_hotels_by_city, search_hotel_offers
 
 mcp = FastMCP("hotel-mcp")
+
+
+@mcp.custom_route("/health", methods=["GET"], include_in_schema=False)
+async def health(_request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "service": "hotel-mcp"})
 
 
 @mcp.tool()
