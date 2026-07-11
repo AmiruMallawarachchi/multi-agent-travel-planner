@@ -25,10 +25,13 @@ import os
 import time
 import uuid
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+load_dotenv()
 
 from agents.graph import graph
 from core.security import (

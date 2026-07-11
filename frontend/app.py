@@ -16,8 +16,11 @@ import os
 
 import gradio as gr
 import httpx
+from dotenv import load_dotenv
 
 from theme import CUSTOM_CSS, TRIPWEAVER_THEME, ticker_html
+
+load_dotenv()
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "")
