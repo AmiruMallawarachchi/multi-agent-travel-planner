@@ -1,0 +1,3 @@
+# hotel-mcp - standalone MCP server, deployed as its own process/service.
+fastmcp>=3.0,<4.0
+httpx>=0.27
