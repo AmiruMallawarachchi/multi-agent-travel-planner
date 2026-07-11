@@ -12,5 +12,6 @@ langgraph-checkpoint>=2.0
 langchain-core>=0.3
 langchain-openai>=0.3
 langchain-mcp-adapters>=0.1
+mcp>=1.28.1
 
 httpx>=0.27
