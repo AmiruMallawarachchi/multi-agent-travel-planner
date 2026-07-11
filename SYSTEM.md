@@ -139,7 +139,7 @@ between nodes (SRS §7). Full field list:
 | `missing_fields` | `list[str]` | reserved for explicit missing-field tracking — currently agents ask via natural language in `messages` rather than populating this list structurally; see §13 roadmap |
 | `clarification_question` | `str \| None` | `clarify_node` |
 | `hotel_results` / `flight_results` | `list[dict]` | reserved for structured result storage — currently results live in `messages` as tool output; see §13 |
-| `booking_confirmation` | `dict \| None` | reserved, same as above |
+| `booking_confirmation` | `dict \| None` | `_run_specialist` after a successful simulated `book_hotel` / `book_flight` tool call; includes `type`, `server`, `tool_name`, provider-style confirmation fields, and `"simulated": true` |
 | `tool_calls` | `list[ToolCallRecord]` | `_run_specialist` (every call this turn, success or failure) |
 | `session_id` | `str` | `main.py`, becomes the LangGraph `thread_id` |
 
@@ -319,7 +319,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 | Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §6 documents the exact steps |
 | Richer orchestration (combined hotel+flight itinerary in one turn) | `[ROADMAP]` — would add a `plan` node that fans out to both specialists and merges before responding |
 | Observability (structured tracing) | Partial — structured request-id logging exists in `main.py`; no distributed tracing (e.g. LangSmith) wired up |
-| Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) as HTML cards |
+| Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) and `booking_confirmation` as HTML cards |
 | Containerisation | Done (Dockerfile per service + docker-compose) |
 | CI | `[ROADMAP]` — no GitHub Actions workflow yet; `pytest` + `py_compile` from §12 is exactly what a CI job should run |
 

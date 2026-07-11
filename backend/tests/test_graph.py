@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from agents.entity import Intent, new_state
-from agents.nodes import classify_intent, hotel_node, route_from_intent
+from agents.entity import ActivityState, Intent, new_state
+from agents.nodes import classify_intent, flight_node, hotel_node, route_from_intent
 
 
 def _fake_llm(reply_content: str, tool_calls: list | None = None):
@@ -104,6 +104,120 @@ class TestGracefulDegradation:
 
         assert result["tool_calls"][0]["status"].value == "FAILED"
         assert any(m.__class__.__name__ == "ToolMessage" for m in result["messages"])
+
+
+class TestBookingConfirmation:
+    @pytest.mark.asyncio
+    async def test_hotel_node_stores_simulated_booking_confirmation(self):
+        state = new_state("s1", "book the hotel offer for Jane Doe")
+        confirmation = {
+            "confirmation_number": "TW-H-1234ABCD",
+            "offer_id": "hotel-offer-1",
+            "guest_name": "Jane Doe",
+            "status": "confirmed",
+            "booked_at": "2026-07-11T10:00:00+00:00",
+            "simulated": True,
+        }
+        booking_tool = SimpleNamespace(
+            name="book_hotel", ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation})
+        )
+        first_call = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "book_hotel",
+                    "args": {"offer_id": "hotel-offer-1", "guest_name": "Jane Doe"},
+                    "id": "call_1",
+                }
+            ],
+        )
+        final_reply = AIMessage(content="Your simulated hotel booking is confirmed: TW-H-1234ABCD.")
+
+        llm = SimpleNamespace()
+        llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
+        llm.bind_tools = lambda _tools: llm
+
+        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.nodes.get_agent_llm", return_value=llm
+        ):
+            result = await hotel_node(state)
+
+        assert result["activity"] == ActivityState.BOOKING
+        assert result["booking_confirmation"] == {
+            "type": "hotel",
+            "server": "hotel-mcp",
+            "tool_name": "book_hotel",
+            **confirmation,
+        }
+        assert result["tool_calls"][0]["detail"] == "TW-H-1234ABCD"
+
+    @pytest.mark.asyncio
+    async def test_flight_node_stores_simulated_booking_confirmation(self):
+        state = new_state("s1", "book that flight for Alex Morgan")
+        confirmation = {
+            "confirmation_number": "TW-F-5678EFGH",
+            "offer_id": "flight-offer-1",
+            "traveller_name": "Alex Morgan",
+            "status": "confirmed",
+            "booked_at": "2026-07-11T10:05:00+00:00",
+            "simulated": True,
+        }
+        booking_tool = SimpleNamespace(
+            name="book_flight", ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation})
+        )
+        first_call = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "book_flight",
+                    "args": {"offer_id": "flight-offer-1", "traveller_name": "Alex Morgan"},
+                    "id": "call_1",
+                }
+            ],
+        )
+        final_reply = AIMessage(content="Your simulated flight booking is confirmed: TW-F-5678EFGH.")
+
+        llm = SimpleNamespace()
+        llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
+        llm.bind_tools = lambda _tools: llm
+
+        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.nodes.get_agent_llm", return_value=llm
+        ):
+            result = await flight_node(state)
+
+        assert result["activity"] == ActivityState.BOOKING
+        assert result["booking_confirmation"] == {
+            "type": "flight",
+            "server": "flight-mcp",
+            "tool_name": "book_flight",
+            **confirmation,
+        }
+        assert result["tool_calls"][0]["detail"] == "TW-F-5678EFGH"
+
+    @pytest.mark.asyncio
+    async def test_failed_booking_response_does_not_create_confirmation(self):
+        state = new_state("s1", "book the hotel")
+        booking_tool = SimpleNamespace(
+            name="book_hotel", ainvoke=AsyncMock(return_value={"ok": False, "error": "guest_name is required"})
+        )
+        first_call = AIMessage(
+            content="",
+            tool_calls=[{"name": "book_hotel", "args": {"offer_id": "hotel-offer-1"}, "id": "call_1"}],
+        )
+        final_reply = AIMessage(content="I need the guest name before I can simulate the booking.")
+
+        llm = SimpleNamespace()
+        llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
+        llm.bind_tools = lambda _tools: llm
+
+        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.nodes.get_agent_llm", return_value=llm
+        ):
+            result = await hotel_node(state)
+
+        assert "booking_confirmation" not in result
+        assert result["tool_calls"][0]["detail"] is None
 
 
 class TestToolLoopCap:
