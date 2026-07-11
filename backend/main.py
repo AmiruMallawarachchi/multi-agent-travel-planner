@@ -98,6 +98,22 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
+def _chunk_text(content) -> str:
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                parts.append(str(item["text"]))
+        return "".join(parts)
+    return str(content)
+
+
 @app.post("/chat/stream")
 async def chat_stream(
     payload: ChatRequest,
@@ -129,24 +145,24 @@ async def chat_stream(
         yield _sse({"type": "session", "session_id": session_id})
         try:
             async for event in graph.astream_events(inputs, config=config, version="v2"):
-                kind = event["event"]
+                kind = event.get("event", "")
                 name = event.get("name", "")
 
                 if kind == "on_chain_start" and name in NODE_ACTIVITY:
                     yield _sse({"type": "status", "state": NODE_ACTIVITY[name], "node": name})
 
                 elif kind == "on_tool_start":
-                    yield _sse({"type": "tool", "status": "INVOKED", "tool": name})
+                    yield _sse({"type": "tool", "status": "INVOKED", "tool": name or "tool"})
 
                 elif kind == "on_tool_end":
-                    yield _sse({"type": "tool", "status": "SUCCEEDED", "tool": name})
+                    yield _sse({"type": "tool", "status": "SUCCEEDED", "tool": name or "tool"})
 
                 elif kind == "on_tool_error":
-                    yield _sse({"type": "tool", "status": "FAILED", "tool": name})
+                    yield _sse({"type": "tool", "status": "FAILED", "tool": name or "tool"})
 
                 elif kind == "on_chat_model_stream":
                     chunk = event["data"]["chunk"]
-                    content = getattr(chunk, "content", "")
+                    content = _chunk_text(getattr(chunk, "content", ""))
                     if content:
                         yield _sse({"type": "token", "content": content})
 
@@ -163,5 +179,6 @@ async def chat_stream(
                     "still up - please try again.",
                 }
             )
+            yield _sse({"type": "done"})
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
