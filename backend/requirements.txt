@@ -1,0 +1,17 @@
+# TripWeaver backend - FastAPI + LangGraph
+# Minimum-version pins; run `pip freeze > requirements.lock.txt` after your
+# first install to freeze exact versions for reproducible deploys.
+
+fastapi>=0.115
+uvicorn[standard]>=0.34
+pydantic>=2.9
+python-dotenv>=1.0
+
+langgraph>=0.6
+langgraph-checkpoint>=2.0
+langchain-core>=0.3
+langchain-openai>=0.3
+langchain-mcp-adapters>=0.1
+mcp>=1.28.1
+
+httpx>=0.27
