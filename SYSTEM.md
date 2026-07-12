@@ -19,8 +19,8 @@ A traveller chats in natural language. A LangGraph workflow classifies
 intent and routes to one of three specialist agents (General QA, Hotel,
 Flight). The Hotel and Flight agents reach real external data **only**
 through their own MCP server, which wraps the Amadeus for Developers
-self-service test API. Responses stream token-by-token to a Gradio
-frontend over Server-Sent Events, with a live agent-activity indicator.
+self-service test API. Responses, activity, and structured travel results
+stream to a Next.js travel cockpit over Server-Sent Events.
 
 Built against the "MCP-Based Multi-Agent Travel Planner" Extension Sprint
 SRS. Section references below (e.g. "SRS §5") point at that spec.
@@ -43,8 +43,10 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `_run_specialist` | Bounds worst-case OpenAI/Amadeus cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
-| D13 | **Railway** for backend + both MCP servers (3 services, 1 project), **Hugging Face Spaces** for the Gradio frontend | Matches SRS §1.4's suggested stack; Railway multi-service project mirrors an existing, working deployment pattern | Render, Fly.io — equally valid, not chosen only for consistency |
+| D13 | **Railway-compatible Docker services** for the Next.js frontend, backend, and both MCP servers | One deployment model keeps the four-service topology reproducible locally and in production | Hugging Face Gradio Space — replaced when the frontend moved to Next.js |
 | D14 | Responsive **travel cockpit** frontend with chat as the primary surface and a synchronized context rail | Keeps the multi-agent process visible without turning the experience into an engineering dashboard; the visual rail carries session state, live tool activity, and the travel identity | Generic chatbot page — rejected because it hides the product's orchestration and travel context |
+| D15 | Browser requests go through a **same-origin Next.js server proxy** | Keeps `BACKEND_API_KEY` out of browser JavaScript while preserving the FastAPI SSE contract | Public browser API key — rejected because it would expose a billable credential |
+| D16 | Structured card data is normalized from successful `on_tool_end` payloads in the FastAPI bridge | Cards reflect provider data, not model-written markdown, and the frontend receives a stable provider-neutral shape | Parsing assistant prose — rejected as brittle and unsafe |
 
 ---
 
@@ -65,11 +67,13 @@ reproducible build.
 | `langchain-core` | 1.4.9 | backend |
 | `langchain-openai` | 1.3.4 | backend |
 | `langchain-mcp-adapters` | 0.3.0 | backend |
-| `httpx` | 0.28.1 | backend, both MCP servers, frontend |
+| `httpx` | 0.28.1 | backend, both MCP servers |
 | `mcp` | 1.28.1 | pulled in by `langchain-mcp-adapters` |
 | `fastmcp` | 3.4.4 | both MCP servers |
-| `gradio` | 5.50.0 | frontend |
 | `pytest` / `pytest-asyncio` | 9.1.1 / 1.4.0 | backend tests |
+| `next` / `react` | 16.2.10 / 19.2.7 | frontend |
+| `tailwindcss` | 4.3.2 | frontend visual system |
+| `vitest` | 4.1.10 | frontend tests |
 
 Note: `langchain-core` crossed to a `1.x` major version in this build —
 if you're extending this later and something in `langchain_core.messages`
@@ -116,11 +120,11 @@ mcp_servers/
     requirements.txt / Dockerfile / railway.json / .env.example
 
 frontend/
-  app.py                        Gradio cockpit UI + synchronized SSE client (stream_turn)
-  theme.py                       Responsive airport-lounge visual system
-  assets/                        Product imagery used by the cockpit context rail
-  test_app.py                    Cockpit output-contract and HTML-safety tests
-  requirements.txt / README.md (HF Spaces metadata) / .env.example
+  app/                           Next.js app, API proxy routes, global visual system
+  components/                    Travel cockpit + shadcn-style UI primitives
+  lib/                           SSE parser, stable types, destination helpers/tests
+  public/images/                 Bundled generated destination imagery
+  package.json / Dockerfile / README.md / .env.example
 
 docker-compose.yml              All 4 services wired together for local dev
 README.md / SECURITY.md / MCP_SETUP.md / SYSTEM.md (this file)
@@ -141,21 +145,22 @@ between nodes (SRS §7). Full field list:
 | `activity` | `ActivityState \| None` | every node (drives the frontend ticker) |
 | `missing_fields` | `list[str]` | reserved for explicit missing-field tracking — currently agents ask via natural language in `messages` rather than populating this list structurally; see §13 roadmap |
 | `clarification_question` | `str \| None` | `clarify_node` |
-| `hotel_results` / `flight_results` | `list[dict]` | reserved for structured result storage — currently results live in `messages` as tool output; see §13 |
+| `hotel_results` / `flight_results` | `list[dict]` | reserved for future graph-state persistence; current-turn card data streams directly from successful tool-end events |
 | `booking_confirmation` | `dict \| None` | `_run_specialist` after a successful simulated `book_hotel` / `book_flight` tool call; includes `type`, `server`, `tool_name`, provider-style confirmation fields, and `"simulated": true` |
 | `tool_calls` | `list[ToolCallRecord]` | `_run_specialist` (every call this turn, success or failure) |
 | `session_id` | `str` | `main.py`, becomes the LangGraph `thread_id` |
 
 `Intent`, `ActivityState`, `ToolCallStatus` are `str` Enums matching SRS §2
-and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
-`frontend/app.py` is a direct rendering of `ActivityState`.
+and §6's tables exactly. The frontend's `ActivityState` union and four-stage
+timeline are a direct rendering of the same values.
 
 ---
 
 ## 5. Request lifecycle (one turn, step by step)
 
-1. Frontend (`frontend/app.py:stream_turn`) POSTs `{message, session_id}`
-   to `POST /chat/stream` with header `X-API-Key`.
+1. Browser POSTs `{message, session_id}` to the same-origin Next.js
+   `POST /api/chat` route. The server-only proxy adds `X-API-Key` and forwards
+   the request to FastAPI `POST /chat/stream` without buffering the SSE body.
 2. `main.py:chat_stream` — `require_api_key` → `check_rate_limit` →
    `sanitize_user_message` → `validate_session_id` (mint one via
    `new_session_id()` if none supplied) → builds `inputs` for the graph.
@@ -164,6 +169,7 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    `{"type": "session", "session_id": ...}` and translates graph events:
    - `on_chain_start` for a known node name → `{"type": "status", "state": ...}`
    - `on_tool_start` / `on_tool_end` / `on_tool_error` → `{"type": "tool", "status": "INVOKED|SUCCEEDED|FAILED", ...}`
+   - successful travel `on_tool_end` payloads → provider-neutral `{"type": "result", "category": "hotel|flight|booking", ...}`
    - `on_chat_model_stream` → `{"type": "token", "content": ...}` with provider-specific chunk shapes normalized to plain text
 4. Inside the graph: `classify_intent` → conditional edge
    (`route_from_intent`) → one of `general_qa_node` / `hotel_node` /
@@ -175,10 +181,9 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    try/except and turned into `{"type": "error", "message": "..."}` followed
    by `{"type": "done"}` — the generator still completes cleanly, the app
    never crashes.
-7. Frontend renders tokens into the last chat message live. The ticker,
-   four-stage agent timeline, and trip-detail rail update as one seven-output
-   UI frame for routing plus every tool `INVOKED` / `SUCCEEDED` / `FAILED`
-   event, then reset together when the turn ends.
+7. Frontend parses arbitrary SSE network chunks, streams tokens into the last
+   chat message, updates the four-stage activity timeline, and renders result
+   events into hotel, flight, or simulated booking cards.
 
 ---
 
@@ -240,25 +245,23 @@ Full detail in `SECURITY.md`. Summary of what's implemented:
 | `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS` | backend | rate limiter tuning |
 | `MAX_MESSAGE_LENGTH` | backend | input length cap |
 | `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, `AMADEUS_BASE_URL` | both MCP servers | Amadeus auth |
-| `PORT` | backend + both MCP servers | injected by Railway; each service reads it itself |
-| `BACKEND_URL` | frontend | backend's public URL |
-| `BACKEND_API_KEY` | frontend | must equal one value in backend's `TRIPWEAVER_API_KEYS` |
+| `PORT` | all four services | injected by the platform; each service reads it itself |
+| `BACKEND_URL` | frontend server | backend URL used by the same-origin proxy |
+| `BACKEND_API_KEY` | frontend server | server-only value matching one backend `TRIPWEAVER_API_KEYS` entry |
 
 ---
 
 ## 10. Deployment topology & order
 
-See `README.md` "Deploying" for the exact click-by-click order (MCP
-servers → backend → frontend → backend CORS redeploy). Each of the 4
-services is independently buildable from its own `Dockerfile` +
-`railway.json` (backend/MCP servers) or HF Spaces `README.md` metadata
-(frontend) — there is no shared/monorepo build step.
+See `README.md` "Deploying" for the deployment order (MCP servers → backend
+→ frontend). Each of the four services is independently buildable from its
+own Dockerfile; the frontend runs as a standalone Next.js Node service.
 
 ---
 
 ## 11. Testing strategy
 
-`backend/tests/` — 26 tests, all offline:
+`backend/tests/` — offline pytest suite:
 - `test_graph.py` — routing correctness (every `Intent` value, invalid-
   label fallback to `CLARIFY`), graceful degradation when a tool server is
   down, a failing tool call being recorded without crashing, and the
@@ -266,6 +269,11 @@ services is independently buildable from its own `Dockerfile` +
 - `test_security.py` — sanitization edge cases, session-id validation
   (including a SQL-injection-shaped string, deliberately), rate-limit
   trip/independent-buckets, and all four API-key auth branches.
+- `test_api.py` — auth/CORS, the SSE lifecycle, structured hotel/flight/
+  booking result normalization, and graceful stream errors.
+
+`frontend/lib/sse.test.ts` — Vitest coverage for split network frames,
+destination selection, and provider-value formatting.
 
 LLM and MCP tool calls are mocked (`unittest.mock`) — no `OPENAI_API_KEY`
 or Amadeus credentials are needed to run the suite or in CI.
@@ -274,10 +282,10 @@ or Amadeus credentials are needed to run the suite or in CI.
 
 ## 12. What was actually verified in this build (not just written)
 
-- `pip install` of every `requirements.txt` (backend, both MCP servers,
-  frontend) into clean venvs — no dependency conflicts, versions in §2.
+- `pip install` of backend and MCP requirements plus `npm install` for the
+  Next.js frontend — no dependency conflicts.
 - `py_compile` of every `.py` file in the repo.
-- `pytest` — 26/26 passing against the real installed `langgraph`/
+- `pytest` passes against the real installed `langgraph`/
   `langchain-*` versions above (not just mocked at the import level —
   the actual graph, node, and security code executes).
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
@@ -298,9 +306,8 @@ or Amadeus credentials are needed to run the suite or in CI.
   (confirmed 429s after the configured threshold, per-identity buckets
   independent). One real bug was caught this way — `/session` was
   missing its `check_rate_limit` call — and fixed; see D11.
-- Gradio app (`frontend/app.py`) fully imported, confirming the entire
-  `Blocks` layout, theme, CSS, and event-chaining (`.click().then(...)`)
-  construct without error.
+- Frontend `vitest`, ESLint, TypeScript, and optimized `next build` pass;
+  the live Next.js root and server health proxy return HTTP 200.
 
 What was **not** verified (no network access to these domains from the
 build sandbox): a real OpenAI completion, and a real Amadeus API response
@@ -326,7 +333,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 | Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §6 documents the exact steps |
 | Richer orchestration (combined hotel+flight itinerary in one turn) | `[ROADMAP]` — would add a `plan` node that fans out to both specialists and merges before responding |
 | Observability (structured tracing) | Partial — structured request-id logging exists in `main.py`; no distributed tracing (e.g. LangSmith) wired up |
-| Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) and `booking_confirmation` as HTML cards |
+| Result cards / structured hotel-flight layout in UI | Done — FastAPI emits stable result events rendered as flight, stay, and simulated confirmation cards |
 | Containerisation | Done (Dockerfile per service + docker-compose) |
 | CI | `[ROADMAP]` — no GitHub Actions workflow yet; `pytest` + `py_compile` from §12 is exactly what a CI job should run |
 
@@ -339,9 +346,8 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 - **Real payment/booking**: edit `amadeus_client.py`'s `book_*_offer`
   functions only — the tool interface (`server.py`) and every agent are
   already written against the real shape.
-- **Structured result cards**: populate `hotel_results`/`flight_results` in
-  `_run_specialist`'s return dict (fields already exist, unused today),
-  then render them in `frontend/app.py` instead of/alongside markdown text.
+- **Persist structured cards across turns**: populate `hotel_results` and
+  `flight_results` in graph state, then include them when restoring a session.
 - **Horizontal scaling**: swap `core/security.py`'s in-memory rate-limit
   dict and `MemorySaver` for Redis-backed equivalents — both are isolated
   behind small interfaces already.

@@ -18,7 +18,7 @@ third-party data (Amadeus) back into the conversation. The relevant threats:
 | 5 | A malicious/compromised MCP server returning instructions instead of data (indirect prompt injection / "tool poisoning") | Untrusted-data fencing + explicit guardrail prompt (section 3 below) |
 | 6 | A model looping on tool calls and burning cost | Hard cap: `MAX_TOOL_ROUNDS` per turn |
 | 7 | One dead external service taking the whole app down | Circuit breaker in `agents/mcp_client.py`; every tool call is try/except'd |
-| 8 | Secrets leaking into logs, git, or the frontend | `.env` gitignored everywhere; backend never echoes raw provider error bodies; frontend never touches OpenAI/Amadeus keys, only its own backend's API key |
+| 8 | Secrets leaking into logs, git, or browser JavaScript | `.env` files are gitignored; backend never echoes raw provider error bodies; the Next.js server proxy keeps `BACKEND_API_KEY` server-side; frontend never receives OpenAI or Amadeus keys |
 | 9 | Open CORS turning the backend into a public API for anyone's website | `ALLOWED_ORIGINS` explicit allowlist, no `*` in production |
 
 ## 2. Auth & rate limiting (`backend/core/security.py`)

@@ -14,8 +14,9 @@ Planner* Extension Sprint spec.
 
 ```mermaid
 flowchart TD
-    U["Traveller"] -->|"chat"| FE["Gradio frontend"]
-    FE <-->|"SSE /chat/stream"| BE["FastAPI backend"]
+    U["Traveller"] -->|"chat"| FE["Next.js travel cockpit"]
+    FE -->|"same-origin proxy"| NX["Next.js server route"]
+    NX <-->|"SSE /chat/stream"| BE["FastAPI backend"]
     BE --> G["LangGraph: classify_intent"]
     G -->|"hotel"| HA["Hotel Agent"]
     G -->|"flight"| FA["Flight Agent"]
@@ -27,7 +28,7 @@ flowchart TD
     FM <--> AM2["Amadeus test API"]
 ```
 
-Three independently deployable processes: **frontend** (Gradio), **backend**
+Four independently deployable services: **frontend** (Next.js), **backend**
 (FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
 never call Amadeus directly - only through their own server's MCP tools -
 so adding or swapping a travel data provider never touches agent code.
@@ -39,7 +40,7 @@ so adding or swapping a travel data provider never touches agent code.
 - Real external data via MCP: hotel + flight search on Amadeus's test API
 - Streaming responses, token-by-token, over SSE
 - Agent-activity visualisation (ROUTING / SEARCHING / BOOKING / RESPONDING
-  / CLARIFYING - a "departure board" ticker in the UI)
+  / CLARIFYING) with a live four-stage timeline
 - Graceful degradation: a dead MCP server never crashes the app
 - Follow-up questions for missing input, never guessed values
 - Responsive travel cockpit with streaming chat, live agent timeline, trip
@@ -55,11 +56,11 @@ so adding or swapping a travel data provider never touches agent code.
   history trimming, result-count caps - all to keep cost and latency bounded
 - **Memory**: LangGraph `MemorySaver` gives free cross-turn context per
   session ("make it cheaper" works without repeating the city and dates)
-- **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
-  friendly error messages instead of stack traces
-- **Tests**: 26 unit tests covering routing, graceful degradation, and the
-  tool-loop cap, running against mocked LLM/tool calls (no API keys needed
-  in CI)
+- **UX**: destination-aware imagery, animated route canvas, structured hotel
+  and flight cards, simulated booking confirmations, quick prompts, a mobile
+  trip drawer, and retry-friendly errors instead of stack traces
+- **Tests**: offline backend and frontend suites covering routing, graceful
+  degradation, SSE normalization, browser-stream parsing, and formatting
 
 ## Repository layout
 
@@ -79,10 +80,11 @@ mcp_servers/
   hotel_mcp/                 list_hotels / search_hotels / book_hotel
   flight_mcp/                 list_flights / search_flights / book_flight
 frontend/
-  app.py                     Gradio travel cockpit, SSE client
-  theme.py                   Responsive visual system
-  assets/                    Cockpit imagery
-  test_app.py                Frontend contract tests
+  app/                       Next.js pages, server proxy routes, visual system
+  components/                Travel cockpit and shadcn-style UI primitives
+  lib/                       SSE parser, data types, destination helpers/tests
+  public/images/             Bundled destination and lounge imagery
+  package.json               TypeScript, lint, test, and build scripts
 docker-compose.yml            Run all four services together, locally
 SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```
@@ -102,14 +104,14 @@ cp .env.example .env   # add OPENAI_API_KEY, set TRIPWEAVER_API_KEYS
 pip install -r requirements.txt
 uvicorn main:app --reload
 
-# 3. Frontend
+# 3. Frontend (new terminal)
 cd ../frontend
-cp .env.example .env   # BACKEND_API_KEY must match one value in TRIPWEAVER_API_KEYS
-pip install -r requirements.txt
-python app.py
+cp .env.example .env.local   # BACKEND_API_KEY must match TRIPWEAVER_API_KEYS
+npm install
+npm run dev
 ```
 
-Open http://localhost:7860. Or simply: `docker compose up --build`.
+Open http://localhost:3000. Or simply: `docker compose up --build`.
 
 ## Deploying
 
@@ -120,13 +122,13 @@ Deploy in this order - each step needs the previous step's URL:
    `MCP_SETUP.md` section 7.
 2. **`backend`** to Railway, root directory `backend`. Set
    `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` to the two URLs from step 1,
-   `OPENAI_API_KEY`, `TRIPWEAVER_API_KEYS` (generate a long random string),
-   and `ALLOWED_ORIGINS` (you'll fill this in after step 3, then redeploy).
-3. **`frontend`** to Hugging Face Spaces, root = `frontend/`. Set
+   `OPENAI_API_KEY`, and `TRIPWEAVER_API_KEYS` (generate a long random
+   string).
+3. **`frontend`** to Railway or another Node-compatible host, root =
+   `frontend/`. Set
    `BACKEND_URL` to the backend's Railway URL and `BACKEND_API_KEY` to one
    of the values in `TRIPWEAVER_API_KEYS`.
-4. Go back to the backend's Railway variables and set `ALLOWED_ORIGINS` to
-   your Space's URL, then redeploy the backend so CORS actually allows it.
+   The API key is consumed only by the server-side proxy route.
 
 ## Testing
 
@@ -134,14 +136,17 @@ Deploy in this order - each step needs the previous step's URL:
 cd backend
 pip install -r requirements-dev.txt
 pytest -v
+
+cd ../frontend
+npm install
+npm test
+npm run lint
+npm run typecheck
+npm run build
 ```
 
-26 tests, all offline (LLM and MCP tool calls are mocked) - they check
-routing correctness, that a dead MCP server degrades a turn gracefully
-instead of crashing it, and that the tool-call loop cap actually stops
-runaway tool calling. Every file in this repo has also been `py_compile`'d
-and import-checked against the exact dependency versions pinned in each
-`requirements.txt`.
+All tests run offline. LLM and MCP calls are mocked; frontend stream parsing
+uses synthetic network chunks. No API keys are needed for the test suites.
 
 ## Viva quick-reference
 
@@ -156,5 +161,5 @@ for the questions SRS section 11 says to expect:
 - **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
   `_run_specialist`'s try/except in `agents/nodes.py`
 - **Streaming / activity cues** -> `main.py`'s `astream_events` bridge,
-  `frontend/app.py`'s SSE consumer
+  `frontend/components/travel-cockpit.tsx` and `frontend/lib/sse.ts`
 - **Security** -> `SECURITY.md`
