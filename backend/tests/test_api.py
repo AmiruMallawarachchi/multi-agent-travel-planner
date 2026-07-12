@@ -158,6 +158,169 @@ class TestSseBridge:
         assert {"type": "token", "content": "hello"} in events
         assert events[-1] == {"type": "done"}
 
+    def test_stream_emits_normalized_hotel_result_cards(self, monkeypatch):
+        fake_graph = FakeGraph(
+            [
+                {
+                    "event": "on_tool_end",
+                    "name": "search_hotels",
+                    "data": {
+                        "output": {
+                            "ok": True,
+                            "offers": [
+                                {
+                                    "hotel": {
+                                        "hotelId": "H1",
+                                        "name": "Maison Lumiere",
+                                        "cityCode": "PAR",
+                                        "rating": "5",
+                                    },
+                                    "offers": [
+                                        {
+                                            "id": "offer-h1",
+                                            "checkInDate": "2026-09-10",
+                                            "checkOutDate": "2026-09-14",
+                                            "price": {"currency": "EUR", "total": "840.00"},
+                                            "room": {
+                                                "typeEstimated": {
+                                                    "category": "DELUXE_ROOM",
+                                                    "beds": 1,
+                                                    "bedType": "KING",
+                                                }
+                                            },
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    },
+                }
+            ]
+        )
+        monkeypatch.setattr(main, "graph", fake_graph)
+        client = _client(monkeypatch)
+
+        response = client.post(
+            "/chat/stream",
+            headers={"X-API-Key": "test-key"},
+            json={"message": "find hotels"},
+        )
+
+        result = next(event for event in _events(response.text) if event["type"] == "result")
+        assert result["category"] == "hotel"
+        assert result["items"] == [
+            {
+                "id": "offer-h1",
+                "hotel_id": "H1",
+                "name": "Maison Lumiere",
+                "city_code": "PAR",
+                "address": None,
+                "rating": "5",
+                "check_in": "2026-09-10",
+                "check_out": "2026-09-14",
+                "room": "DELUXE_ROOM",
+                "beds": 1,
+                "bed_type": "KING",
+                "price": "840.00",
+                "currency": "EUR",
+                "available": True,
+            }
+        ]
+
+    def test_stream_emits_flight_and_simulated_booking_cards(self, monkeypatch):
+        fake_graph = FakeGraph(
+            [
+                {
+                    "event": "on_tool_end",
+                    "name": "search_flights",
+                    "data": {
+                        "output": {
+                            "ok": True,
+                            "offers": [
+                                {
+                                    "id": "flight-1",
+                                    "itineraries": [
+                                        {
+                                            "duration": "PT11H30M",
+                                            "segments": [
+                                                {
+                                                    "departure": {"iataCode": "CMB", "at": "2026-09-01T08:00:00"},
+                                                    "arrival": {"iataCode": "LHR", "at": "2026-09-01T18:30:00"},
+                                                    "carrierCode": "UL",
+                                                    "number": "503",
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                    "price": {"currency": "USD", "grandTotal": "720.00"},
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "event": "on_tool_end",
+                    "name": "book_flight",
+                    "data": {
+                        "output": {
+                            "ok": True,
+                            "confirmation": {
+                                "confirmation_number": "TW-F-1234ABCD",
+                                "offer_id": "flight-1",
+                                "traveller_name": "Alex Morgan",
+                                "status": "confirmed",
+                                "booked_at": "2026-07-12T08:00:00+00:00",
+                                "simulated": True,
+                            },
+                        }
+                    },
+                },
+            ]
+        )
+        monkeypatch.setattr(main, "graph", fake_graph)
+        client = _client(monkeypatch)
+
+        response = client.post(
+            "/chat/stream",
+            headers={"X-API-Key": "test-key"},
+            json={"message": "book a flight"},
+        )
+
+        results = [event for event in _events(response.text) if event["type"] == "result"]
+        assert results[0]["items"][0]["origin"] == "CMB"
+        assert results[0]["items"][0]["destination"] == "LHR"
+        assert results[0]["items"][0]["stops"] == 0
+        assert results[1]["confirmation"] == {
+            "type": "flight",
+            "confirmation_number": "TW-F-1234ABCD",
+            "offer_id": "flight-1",
+            "traveller_name": "Alex Morgan",
+            "status": "confirmed",
+            "booked_at": "2026-07-12T08:00:00+00:00",
+            "simulated": True,
+        }
+
+    def test_failed_tool_result_does_not_emit_result_card(self, monkeypatch):
+        fake_graph = FakeGraph(
+            [
+                {
+                    "event": "on_tool_end",
+                    "name": "search_hotels",
+                    "data": {"output": {"ok": False, "error": "unavailable"}},
+                }
+            ]
+        )
+        monkeypatch.setattr(main, "graph", fake_graph)
+        client = _client(monkeypatch)
+
+        response = client.post(
+            "/chat/stream",
+            headers={"X-API-Key": "test-key"},
+            json={"message": "find hotels"},
+        )
+
+        assert not any(event["type"] == "result" for event in _events(response.text))
+
     def test_stream_turns_graph_exception_into_error_event(self, monkeypatch):
         fake_graph = FakeGraph(exc=RuntimeError("boom"))
         monkeypatch.setattr(main, "graph", fake_graph)
