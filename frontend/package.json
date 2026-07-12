@@ -8,7 +8,7 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.13",
