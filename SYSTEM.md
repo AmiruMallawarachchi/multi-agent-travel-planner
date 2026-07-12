@@ -44,6 +44,7 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
 | D13 | **Railway** for backend + both MCP servers (3 services, 1 project), **Hugging Face Spaces** for the Gradio frontend | Matches SRS §1.4's suggested stack; Railway multi-service project mirrors an existing, working deployment pattern | Render, Fly.io — equally valid, not chosen only for consistency |
+| D14 | Responsive **travel cockpit** frontend with chat as the primary surface and a synchronized context rail | Keeps the multi-agent process visible without turning the experience into an engineering dashboard; the visual rail carries session state, live tool activity, and the travel identity | Generic chatbot page — rejected because it hides the product's orchestration and travel context |
 
 ---
 
@@ -115,8 +116,10 @@ mcp_servers/
     requirements.txt / Dockerfile / railway.json / .env.example
 
 frontend/
-  app.py                        Gradio Blocks UI + SSE client (stream_turn)
-  theme.py                       Colors/fonts/CSS - "dusk departure" visual identity
+  app.py                        Gradio cockpit UI + synchronized SSE client (stream_turn)
+  theme.py                       Responsive airport-lounge visual system
+  assets/                        Product imagery used by the cockpit context rail
+  test_app.py                    Cockpit output-contract and HTML-safety tests
   requirements.txt / README.md (HF Spaces metadata) / .env.example
 
 docker-compose.yml              All 4 services wired together for local dev
@@ -172,9 +175,10 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    try/except and turned into `{"type": "error", "message": "..."}` followed
    by `{"type": "done"}` — the generator still completes cleanly, the app
    never crashes.
-7. Frontend renders tokens into the last chat message live, and the
-   ticker (`theme.ticker_html`) reflects routing status plus every tool
-   `INVOKED` / `SUCCEEDED` / `FAILED` event.
+7. Frontend renders tokens into the last chat message live. The ticker,
+   four-stage agent timeline, and trip-detail rail update as one seven-output
+   UI frame for routing plus every tool `INVOKED` / `SUCCEEDED` / `FAILED`
+   event, then reset together when the turn ends.
 
 ---
 

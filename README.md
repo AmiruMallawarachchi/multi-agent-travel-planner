@@ -42,7 +42,8 @@ so adding or swapping a travel data provider never touches agent code.
   / CLARIFYING - a "departure board" ticker in the UI)
 - Graceful degradation: a dead MCP server never crashes the app
 - Follow-up questions for missing input, never guessed values
-- Travel-themed, responsive Gradio UI
+- Responsive travel cockpit with streaming chat, live agent timeline, trip
+  context rail, and an image-led airport-lounge visual system
 
 **Added on top**
 - **Security**: API-key auth, per-identity rate limiting, three-layer input
@@ -78,8 +79,10 @@ mcp_servers/
   hotel_mcp/                 list_hotels / search_hotels / book_hotel
   flight_mcp/                 list_flights / search_flights / book_flight
 frontend/
-  app.py                     Gradio Blocks UI, SSE client
-  theme.py                   Colors, fonts, activity-ticker CSS
+  app.py                     Gradio travel cockpit, SSE client
+  theme.py                   Responsive visual system
+  assets/                    Cockpit imagery
+  test_app.py                Frontend contract tests
 docker-compose.yml            Run all four services together, locally
 SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```
