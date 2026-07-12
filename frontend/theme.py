@@ -1,25 +1,4 @@
-"""
-frontend/theme.py
-TripWeaver's visual identity: a "dusk departure" theme - the deep indigo of
-a night sky just after takeoff, a warm coral/amber horizon glow, and a
-split-flap "departure board" motif for agent activity, which does double
-duty as the SRS section 9 "agent-activity visualisation" requirement and a
-genuinely on-brand piece of travel UI rather than a generic spinner.
-
-Palette
-  Midnight Indigo #14132B  - page background base
-  Dusk Violet     #241F47  - panels, chat bubbles (assistant)
-  Horizon Coral   #FF6B5B  - primary accent: send button, links, active states
-  Amber Beacon    #FFB84D  - secondary accent: activity ticker, highlights
-  Cloud White     #F5F3FF  - primary text on dark
-  Mist Grey       #9B95C9  - secondary / muted text
-
-Type
-  Space Grotesk - display / headings (a little personality, still legible)
-  Inter         - body text
-  JetBrains Mono - flight numbers, prices, confirmation codes (departure-
-                   board authenticity for anything that's really "data")
-"""
+"""TripWeaver's premium airport-lounge visual system."""
 import gradio as gr
 
 FONT_IMPORT = (
@@ -30,78 +9,117 @@ FONT_IMPORT = (
 
 TRIPWEAVER_THEME = gr.themes.Base(
     primary_hue=gr.themes.colors.orange,
-    secondary_hue=gr.themes.colors.purple,
+    secondary_hue=gr.themes.colors.cyan,
     neutral_hue=gr.themes.colors.slate,
     font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
     font_mono=[gr.themes.GoogleFont("JetBrains Mono"), "ui-monospace", "monospace"],
 ).set(
-    body_background_fill="#14132B",
-    body_text_color="#F5F3FF",
-    background_fill_primary="#1B1940",
-    background_fill_secondary="#241F47",
-    border_color_primary="#3A3470",
-    button_primary_background_fill="#FF6B5B",
-    button_primary_background_fill_hover="#FF8879",
-    button_primary_text_color="#14132B",
-    button_secondary_background_fill="#241F47",
-    button_secondary_text_color="#F5F3FF",
-    block_background_fill="#1B1940",
-    block_border_color="#3A3470",
-    input_background_fill="#241F47",
-    block_title_text_color="#F5F3FF",
-    body_text_color_subdued="#9B95C9",
+    body_background_fill="#0A1120",
+    body_text_color="#F7F8FC",
+    background_fill_primary="#101A2C",
+    background_fill_secondary="#142238",
+    border_color_primary="#27364D",
+    button_primary_background_fill="#FF7A59",
+    button_primary_background_fill_hover="#FF9277",
+    button_primary_text_color="#0A1120",
+    button_secondary_background_fill="#142238",
+    button_secondary_text_color="#F7F8FC",
+    block_background_fill="#101A2C",
+    block_border_color="#27364D",
+    input_background_fill="#0D1728",
+    block_title_text_color="#F7F8FC",
+    body_text_color_subdued="#A7B1C2",
 )
 
 CUSTOM_CSS = f"""
 {FONT_IMPORT}
 
 :root {{
-  --tw-indigo: #14132B;
-  --tw-violet: #241F47;
-  --tw-coral: #FF6B5B;
-  --tw-amber: #FFB84D;
-  --tw-cloud: #F5F3FF;
-  --tw-mist: #9B95C9;
+  --tw-ink: #0A1120;
+  --tw-cabin: #101A2C;
+  --tw-panel: #142238;
+  --tw-line: #27364D;
+  --tw-coral: #FF7A59;
+  --tw-cyan: #62D9F5;
+  --tw-green: #72D6A0;
+  --tw-cloud: #F7F8FC;
+  --tw-mist: #A7B1C2;
 }}
 
 .gradio-container {{
-  background: radial-gradient(ellipse 120% 80% at 50% -10%, #2B2760 0%, var(--tw-indigo) 55%) !important;
+  max-width: none !important;
+  padding: 0 24px !important;
+  background: var(--tw-ink) !important;
   font-family: 'Inter', ui-sans-serif, sans-serif !important;
 }}
 
-/* ---- Header ------------------------------------------------------- */
-#tw-header h1 {{
-  font-family: 'Space Grotesk', ui-sans-serif, sans-serif !important;
-  font-weight: 700;
-  background: linear-gradient(90deg, var(--tw-cloud) 0%, var(--tw-amber) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: -0.02em;
-  margin-bottom: 0 !important;
-}}
-#tw-header p {{ color: var(--tw-mist) !important; margin-top: 2px !important; }}
-
-/* ---- Split-flap activity ticker ------------------------------------ */
-#tw-ticker {{
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tw-amber);
-  background: #100F26;
-  border: 1px solid #3A3470;
-  border-radius: 8px;
-  padding: 8px 14px;
-  min-height: 18px;
-  display: flex;
+#tw-topbar {{
+  width: min(1440px, 100%);
+  min-height: 74px;
+  margin: 0 auto;
   align-items: center;
-  gap: 8px;
+  border-bottom: 1px solid rgba(167, 177, 194, 0.16);
+}}
+#tw-topbar > .form {{ align-items: center; }}
+.tw-brand {{ display: flex; align-items: center; gap: 12px; }}
+.tw-brand-mark {{
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border: 1px solid rgba(98, 217, 245, 0.55); border-radius: 8px;
+  color: var(--tw-cyan); font: 600 0.72rem 'JetBrains Mono', monospace;
+  background: rgba(98, 217, 245, 0.08);
+}}
+.tw-brand div {{ display: flex; flex-direction: column; gap: 1px; }}
+.tw-brand strong {{ font: 700 1rem 'Space Grotesk', sans-serif; color: var(--tw-cloud); }}
+.tw-brand span:last-child {{ color: var(--tw-mist); font-size: 0.72rem; }}
+#tw-new-trip {{ max-width: 112px; min-width: 112px; border-radius: 6px !important; }}
+
+#tw-workspace {{
+  width: min(1440px, 100%);
+  min-height: 760px;
+  margin: 24px auto 0;
+  gap: 18px;
+  align-items: stretch;
+}}
+#tw-chat-shell, #tw-context-rail {{ gap: 14px; }}
+#tw-chat-shell {{
+  padding: 28px !important;
+  background: rgba(16, 26, 44, 0.96);
+  border: 1px solid var(--tw-line);
+  border-radius: 8px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+}}
+.tw-chat-heading, .tw-panel-heading {{
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+}}
+.tw-chat-heading h1 {{
+  margin: 4px 0 0; color: var(--tw-cloud);
+  font: 700 2.55rem/1.05 'Space Grotesk', sans-serif;
+  letter-spacing: 0;
+}}
+.tw-eyebrow {{
+  color: var(--tw-cyan); font: 600 0.67rem 'JetBrains Mono', monospace;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}}
+.tw-online, .tw-live-pill {{
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--tw-green); font: 600 0.7rem 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}}
+.tw-online i, .tw-live-pill i {{
+  width: 7px; height: 7px; border-radius: 50%; background: var(--tw-green);
+  box-shadow: 0 0 0 4px rgba(114, 214, 160, 0.1);
+}}
+
+#tw-ticker {{
+  min-height: 36px; display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border: 1px solid var(--tw-line); border-radius: 6px;
+  background: #0D1728; color: var(--tw-cyan);
+  font: 600 0.72rem 'JetBrains Mono', monospace;
+  letter-spacing: 0.1em; text-transform: uppercase;
 }}
 #tw-ticker.tw-idle {{ color: var(--tw-mist); opacity: 0.7; }}
 #tw-ticker .tw-dot {{
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--tw-amber);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--tw-cyan);
   animation: tw-pulse 1.1s ease-in-out infinite;
 }}
 @keyframes tw-pulse {{
@@ -109,51 +127,142 @@ CUSTOM_CSS = f"""
   50% {{ opacity: 0.35; transform: scale(0.75); }}
 }}
 
-/* ---- Chat bubbles ---------------------------------------------------- */
+#tw-chat {{
+  min-height: 400px; border: 0 !important; background: transparent !important;
+}}
+#tw-chat .bubble-wrap {{ padding-left: 0 !important; padding-right: 0 !important; }}
 #tw-chat .message.user {{
-  background: var(--tw-coral) !important;
-  color: var(--tw-indigo) !important;
-  border-radius: 16px 16px 4px 16px !important;
+  background: var(--tw-coral) !important; color: var(--tw-ink) !important;
+  border-radius: 8px 8px 2px 8px !important;
 }}
 #tw-chat .message.bot {{
-  background: var(--tw-violet) !important;
-  color: var(--tw-cloud) !important;
-  border: 1px solid #3A3470 !important;
-  border-radius: 16px 16px 16px 4px !important;
+  background: var(--tw-panel) !important; color: var(--tw-cloud) !important;
+  border: 1px solid var(--tw-line) !important;
+  border-radius: 8px 8px 8px 2px !important;
 }}
 #tw-chat .message.bot code {{
+  color: var(--tw-cyan); background: #0D1728;
   font-family: 'JetBrains Mono', monospace;
-  color: var(--tw-amber);
-  background: #100F26;
 }}
 
-/* ---- Quick-reply chips ------------------------------------------------ */
-.tw-chip button {{
-  border-radius: 999px !important;
-  border: 1px solid #3A3470 !important;
-  background: #1B1940 !important;
-  color: var(--tw-mist) !important;
-  font-size: 0.85rem !important;
-  padding: 6px 14px !important;
+#tw-suggestions {{ gap: 8px; flex-wrap: wrap; }}
+#tw-suggestions button {{
+  min-width: fit-content !important; padding: 7px 10px !important;
+  border: 1px solid var(--tw-line) !important; border-radius: 6px !important;
+  background: #0D1728 !important; color: var(--tw-mist) !important;
+  font-size: 0.75rem !important;
 }}
-.tw-chip button:hover {{
-  border-color: var(--tw-coral) !important;
-  color: var(--tw-cloud) !important;
+#tw-suggestions button:hover {{
+  border-color: var(--tw-coral) !important; color: var(--tw-cloud) !important;
+}}
+#tw-send-row {{
+  gap: 8px; padding: 6px; border: 1px solid var(--tw-line);
+  border-radius: 8px; background: #0D1728;
+}}
+#tw-send-row textarea {{
+  min-height: 44px !important; border: 0 !important; box-shadow: none !important;
+}}
+#tw-send {{ min-width: 82px; max-width: 82px; border-radius: 6px !important; }}
+.tw-composer-note, .tw-footer {{
+  display: flex; justify-content: space-between; gap: 12px;
+  color: var(--tw-mist); font-size: 0.68rem;
 }}
 
-/* ---- Misc -------------------------------------------------------------- */
-#tw-footer {{ color: var(--tw-mist) !important; font-size: 0.78rem; text-align: center; opacity: 0.8; }}
-#tw-send-row {{ gap: 8px; }}
+#tw-context-rail {{ position: relative; }}
+#tw-backdrop {{
+  height: 282px !important; min-height: 282px !important;
+  border: 1px solid var(--tw-line); border-radius: 8px; overflow: hidden;
+}}
+#tw-backdrop img {{
+  width: 100% !important; height: 282px !important; object-fit: cover !important;
+}}
+.tw-visual-caption {{
+  min-height: 84px; margin-top: -98px; padding: 22px;
+  position: relative; z-index: 2; pointer-events: none;
+  background: linear-gradient(0deg, rgba(10, 17, 32, 0.94), rgba(10, 17, 32, 0));
+  border-radius: 0 0 8px 8px;
+}}
+.tw-visual-caption span {{
+  color: var(--tw-cyan); font: 600 0.66rem 'JetBrains Mono', monospace;
+  text-transform: uppercase; letter-spacing: 0.12em;
+}}
+.tw-visual-caption strong {{
+  display: block; margin-top: 5px; color: var(--tw-cloud);
+  font: 600 1.25rem/1.15 'Space Grotesk', sans-serif;
+}}
+.tw-panel {{
+  padding: 19px; background: rgba(16, 26, 44, 0.96);
+  border: 1px solid var(--tw-line); border-radius: 8px;
+}}
+.tw-panel-heading h2 {{
+  margin: 3px 0 0; color: var(--tw-cloud);
+  font: 600 1rem 'Space Grotesk', sans-serif; letter-spacing: 0;
+}}
+.tw-secure-mark {{
+  padding: 4px 6px; border: 1px solid var(--tw-line); border-radius: 4px;
+  color: var(--tw-mist); font: 500 0.66rem 'JetBrains Mono', monospace;
+}}
+.tw-trip-grid {{
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  margin-top: 16px; background: var(--tw-line);
+}}
+.tw-metric {{ min-width: 0; padding: 12px; background: var(--tw-cabin); }}
+.tw-metric span {{ display: block; margin-bottom: 5px; color: var(--tw-mist); font-size: 0.65rem; }}
+.tw-metric strong {{
+  display: block; overflow-wrap: anywhere; color: var(--tw-cloud);
+  font: 600 0.73rem 'JetBrains Mono', monospace; text-transform: capitalize;
+}}
+.tw-lanes {{
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 17px;
+}}
+.tw-lane {{
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  color: var(--tw-mist); font: 500 0.62rem 'JetBrains Mono', monospace;
+}}
+.tw-lane-dot {{ width: 100%; height: 3px; border-radius: 2px; background: var(--tw-line); }}
+.tw-lane-active {{ color: var(--tw-cyan); }}
+.tw-lane-active .tw-lane-dot {{
+  background: var(--tw-cyan); box-shadow: 0 0 12px rgba(98, 217, 245, 0.45);
+}}
+.tw-tool-readout {{
+  min-height: 34px; margin-top: 14px; padding: 9px 10px;
+  border: 1px solid var(--tw-line); border-radius: 6px; background: #0D1728;
+  color: var(--tw-mist); font: 500 0.66rem 'JetBrains Mono', monospace;
+  text-transform: capitalize;
+}}
+.tw-footer {{
+  width: min(1440px, 100%); margin: 14px auto 0; padding: 0 2px 22px; opacity: 0.72;
+}}
+
+@media (max-width: 900px) {{
+  .gradio-container {{ padding: 0 14px !important; }}
+  #tw-workspace {{ flex-direction: column !important; min-height: auto; }}
+  #tw-chat-shell, #tw-context-rail {{ min-width: 100% !important; }}
+  #tw-context-rail {{
+    display: grid !important; grid-template-columns: 1fr 1fr; align-items: start;
+  }}
+  #tw-backdrop, .tw-visual-caption {{ grid-column: 1 / -1; }}
+}}
 
 @media (max-width: 640px) {{
-  #tw-header h1 {{ font-size: 1.4rem !important; }}
-  #tw-ticker {{ font-size: 0.72rem; }}
+  .gradio-container {{ padding: 0 10px !important; }}
+  #tw-topbar {{ min-height: 64px; }}
+  #tw-workspace {{ margin-top: 10px; }}
+  #tw-chat-shell {{ min-width: 0 !important; padding: 18px !important; }}
+  .tw-chat-heading h1 {{ font-size: 1.75rem; }}
+  #tw-chat {{ height: 400px !important; }}
+  #tw-suggestions {{ flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }}
+  #tw-suggestions button {{ flex: 0 0 auto; }}
+  #tw-context-rail {{ display: flex !important; flex-direction: column; }}
+  #tw-backdrop, #tw-backdrop img {{ height: 220px !important; min-height: 220px !important; }}
+  .tw-composer-note {{ display: none; }}
+  .tw-footer {{ flex-direction: column; padding-bottom: 16px; }}
 }}
 """
 
 
 def ticker_html(text: str, *, idle: bool = False) -> str:
-    """Render the activity ticker. `idle=True` dims it between turns."""
-    cls = "tw-idle" if idle else ""
+    """Render the compact live activity ticker."""
+    css_class = "tw-idle" if idle else ""
     dot = "" if idle else '<span class="tw-dot"></span>'
-    return f'<div id="tw-ticker" class="{cls}">{dot}{text}</div>'
+    return f'<div id="tw-ticker" class="{css_class}">{dot}{text}</div>'
