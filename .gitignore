@@ -13,6 +13,12 @@ htmlcov/
 .coverage
 *.egg-info/
 
+# Next.js / Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
 # OS / editor
 .DS_Store
 .vscode/
