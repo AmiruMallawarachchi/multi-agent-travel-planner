@@ -11,6 +11,7 @@ import json
 
 from fastapi.testclient import TestClient
 
+from api import routes
 import main
 from core import security
 
@@ -63,7 +64,7 @@ class TestApiSecurity:
 
     def test_session_and_chat_share_rate_limit_bucket(self, monkeypatch):
         fake_graph = FakeGraph()
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch, rate_limit=1)
 
         assert client.post("/session", headers={"X-API-Key": "test-key"}).status_code == 200
@@ -76,7 +77,7 @@ class TestApiSecurity:
 
     def test_invalid_session_id_is_rejected_before_graph_runs(self, monkeypatch):
         fake_graph = FakeGraph()
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -114,7 +115,7 @@ class TestSseBridge:
                 },
             ]
         )
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -143,7 +144,7 @@ class TestSseBridge:
                 {"event": "unknown_event"},
             ]
         )
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -160,7 +161,7 @@ class TestSseBridge:
 
     def test_stream_turns_graph_exception_into_error_event(self, monkeypatch):
         fake_graph = FakeGraph(exc=RuntimeError("boom"))
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
