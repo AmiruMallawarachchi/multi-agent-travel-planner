@@ -1,37 +1,33 @@
----
-title: TripWeaver
-emoji: ✈️
-colorFrom: purple
-colorTo: orange
-sdk: gradio
-app_file: app.py
-pinned: false
----
-
 # TripWeaver frontend
 
-Gradio chat UI for TripWeaver. Talks only to the TripWeaver FastAPI backend
-over `BACKEND_URL` - never calls OpenAI or Amadeus directly, and never
-holds their credentials.
+Minimal Next.js chat frontend for TripWeaver. It keeps the UI intentionally
+simple: a shadcn/prompt-kit inspired chat shell, markdown rendering, code
+blocks, quick prompts, and a server-side SSE proxy to the FastAPI backend.
+
+The browser never receives OpenAI, Amadeus, or backend API credentials.
+`BACKEND_API_KEY` is read only by the Next.js server route at `/api/chat`.
 
 ## Local dev
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env   # fill in BACKEND_URL / BACKEND_API_KEY
-python app.py
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-Open http://localhost:7860
+Open http://localhost:3000.
 
-## Deploying to Hugging Face Spaces
+## Checks
 
-1. Create a new Space -> SDK: Gradio -> hardware: CPU basic is enough.
-2. Push this `frontend/` folder's contents to the Space's git repo root
-   (Spaces expects `app.py` and `requirements.txt` at the root of the repo).
-3. In the Space's **Settings -> Variables and secrets**, add:
-   - `BACKEND_URL` - your deployed Railway backend URL
-   - `BACKEND_API_KEY` - one of the keys you set in the backend's
-     `TRIPWEAVER_API_KEYS`
-4. The Space rebuilds automatically. See the root `README.md` for the full
-   deployment order (MCP servers -> backend -> frontend).
+```bash
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
+
+## Environment
+
+- `BACKEND_URL` - FastAPI backend URL.
+- `BACKEND_API_KEY` - one accepted value from backend `TRIPWEAVER_API_KEYS`.
+- `PORT` - production server port, defaults to `3000`.

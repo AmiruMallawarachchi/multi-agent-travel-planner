@@ -19,8 +19,8 @@ A traveller chats in natural language. A LangGraph workflow classifies
 intent and routes to one of three specialist agents (General QA, Hotel,
 Flight). The Hotel and Flight agents reach real external data **only**
 through their own MCP server, which wraps the Amadeus for Developers
-self-service test API. Responses stream token-by-token to a Gradio
-frontend over Server-Sent Events, with a live agent-activity indicator.
+self-service test API. Responses stream token-by-token to a minimal Next.js
+chat frontend over Server-Sent Events, with a live agent-activity indicator.
 
 Built against the "MCP-Based Multi-Agent Travel Planner" Extension Sprint
 SRS. Section references below (e.g. "SRS §5") point at that spec.
@@ -43,7 +43,8 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `_run_specialist` | Bounds worst-case OpenAI/Amadeus cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
-| D13 | **Railway** for backend + both MCP servers (3 services, 1 project), **Hugging Face Spaces** for the Gradio frontend | Matches SRS §1.4's suggested stack; Railway multi-service project mirrors an existing, working deployment pattern | Render, Fly.io — equally valid, not chosen only for consistency |
+| D13 | Docker-buildable **Railway-compatible services** for backend, frontend, and both MCP servers | One deployment model keeps the four-service topology reproducible locally and in production | Hugging Face Spaces Gradio frontend - replaced when the UI moved to Next.js |
+| D14 | Minimal **Next.js chat frontend** with shadcn/prompt-kit inspired layout, markdown, and code blocks | Keeps the product focused while the frontend direction is rebuilt step by step; chat remains the only committed surface for now | Rich travel cockpit - deferred until the design is guided and approved |
 
 ---
 
@@ -64,11 +65,13 @@ reproducible build.
 | `langchain-core` | 1.4.9 | backend |
 | `langchain-openai` | 1.3.4 | backend |
 | `langchain-mcp-adapters` | 0.3.0 | backend |
-| `httpx` | 0.28.1 | backend, both MCP servers, frontend |
+| `httpx` | 0.28.1 | backend, both MCP servers |
 | `mcp` | 1.28.1 | pulled in by `langchain-mcp-adapters` |
 | `fastmcp` | 3.4.4 | both MCP servers |
-| `gradio` | 5.50.0 | frontend |
 | `pytest` / `pytest-asyncio` | 9.1.1 / 1.4.0 | backend tests |
+| `next` / `react` | 15.5.20 / 19.2.7 | frontend |
+| `highlight.js` / `react-markdown` | 11.11.1 / 9.1.0 | frontend markdown/code blocks |
+| `vitest` | 4.1.10 | frontend tests |
 
 Note: `langchain-core` crossed to a `1.x` major version in this build —
 if you're extending this later and something in `langchain_core.messages`
@@ -115,9 +118,10 @@ mcp_servers/
     requirements.txt / Dockerfile / railway.json / .env.example
 
 frontend/
-  app.py                        Gradio Blocks UI + SSE client (stream_turn)
-  theme.py                       Colors/fonts/CSS - "dusk departure" visual identity
-  requirements.txt / README.md (HF Spaces metadata) / .env.example
+  app/                           Next.js app routes + same-origin backend proxy
+  components/                    Simple chat shell + prompt-kit style code blocks
+  lib/                           SSE parser + focused tests
+  package.json / Dockerfile / README.md / .env.example
 
 docker-compose.yml              All 4 services wired together for local dev
 README.md / SECURITY.md / MCP_SETUP.md / SYSTEM.md (this file)
@@ -135,7 +139,7 @@ between nodes (SRS §7). Full field list:
 | `messages` | `Annotated[list[AnyMessage], add_messages]` | every node (LangGraph reducer appends) |
 | `intent` | `Intent \| None` | `classify_intent` |
 | `active_agent` | `str \| None` | whichever specialist ran |
-| `activity` | `ActivityState \| None` | every node (drives the frontend ticker) |
+| `activity` | `ActivityState \| None` | every node (drives the frontend live state) |
 | `missing_fields` | `list[str]` | reserved for explicit missing-field tracking — currently agents ask via natural language in `messages` rather than populating this list structurally; see §13 roadmap |
 | `clarification_question` | `str \| None` | `clarify_node` |
 | `hotel_results` / `flight_results` | `list[dict]` | reserved for structured result storage — currently results live in `messages` as tool output; see §13 |
@@ -145,14 +149,16 @@ between nodes (SRS §7). Full field list:
 
 `Intent`, `ActivityState`, `ToolCallStatus` are `str` Enums matching SRS §2
 and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
-`frontend/app.py` is a direct rendering of `ActivityState`.
+`frontend/components/simple-chat.tsx` is a direct rendering of `ActivityState`.
 
 ---
 
 ## 5. Request lifecycle (one turn, step by step)
 
-1. Frontend (`frontend/app.py:stream_turn`) POSTs `{message, session_id}`
-   to `POST /chat/stream` with header `X-API-Key`.
+1. Browser POSTs `{message, session_id}` to the same-origin Next.js
+   `POST /api/chat` route. The server-only proxy adds `X-API-Key` and
+   forwards the request to FastAPI `POST /chat/stream` without buffering the
+   SSE body.
 2. `main.py:chat_stream` — `require_api_key` → `check_rate_limit` →
    `sanitize_user_message` → `validate_session_id` (mint one via
    `new_session_id()` if none supplied) → builds `inputs` for the graph.
@@ -236,25 +242,23 @@ Full detail in `SECURITY.md`. Summary of what's implemented:
 | `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS` | backend | rate limiter tuning |
 | `MAX_MESSAGE_LENGTH` | backend | input length cap |
 | `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, `AMADEUS_BASE_URL` | both MCP servers | Amadeus auth |
-| `PORT` | backend + both MCP servers | injected by Railway; each service reads it itself |
-| `BACKEND_URL` | frontend | backend's public URL |
-| `BACKEND_API_KEY` | frontend | must equal one value in backend's `TRIPWEAVER_API_KEYS` |
+| `PORT` | all four services | injected by the platform; each service reads it itself |
+| `BACKEND_URL` | frontend server | backend URL used by the same-origin proxy |
+| `BACKEND_API_KEY` | frontend server | server-only value matching one backend `TRIPWEAVER_API_KEYS` entry |
 
 ---
 
 ## 10. Deployment topology & order
 
-See `README.md` "Deploying" for the exact click-by-click order (MCP
-servers → backend → frontend → backend CORS redeploy). Each of the 4
-services is independently buildable from its own `Dockerfile` +
-`railway.json` (backend/MCP servers) or HF Spaces `README.md` metadata
-(frontend) — there is no shared/monorepo build step.
+See `README.md` "Deploying" for the exact order (MCP servers → backend →
+frontend → backend CORS redeploy). Each of the 4 services is independently
+buildable from its own Dockerfile.
 
 ---
 
 ## 11. Testing strategy
 
-`backend/tests/` — 26 tests, all offline:
+`backend/tests/` — 37 tests, all offline:
 - `test_graph.py` — routing correctness (every `Intent` value, invalid-
   label fallback to `CLARIFY`), graceful degradation when a tool server is
   down, a failing tool call being recorded without crashing, and the
@@ -263,17 +267,19 @@ services is independently buildable from its own `Dockerfile` +
   (including a SQL-injection-shaped string, deliberately), rate-limit
   trip/independent-buckets, and all four API-key auth branches.
 
+`frontend/lib/sse.test.ts` covers the SSE frame parser used by the chat UI.
+
 LLM and MCP tool calls are mocked (`unittest.mock`) — no `OPENAI_API_KEY`
-or Amadeus credentials are needed to run the suite or in CI.
+or Amadeus credentials are needed to run the backend suite or in CI.
 
 ---
 
 ## 12. What was actually verified in this build (not just written)
 
-- `pip install` of every `requirements.txt` (backend, both MCP servers,
-  frontend) into clean venvs — no dependency conflicts, versions in §2.
+- `pip install` of backend and MCP requirements plus `npm install` for the
+  Next.js frontend — no dependency conflicts, versions in §2.
 - `py_compile` of every `.py` file in the repo.
-- `pytest` — 26/26 passing against the real installed `langgraph`/
+- `pytest` — 37/37 passing against the real installed `langgraph`/
   `langchain-*` versions above (not just mocked at the import level —
   the actual graph, node, and security code executes).
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
@@ -294,9 +300,8 @@ or Amadeus credentials are needed to run the suite or in CI.
   (confirmed 429s after the configured threshold, per-identity buckets
   independent). One real bug was caught this way — `/session` was
   missing its `check_rate_limit` call — and fixed; see D11.
-- Gradio app (`frontend/app.py`) fully imported, confirming the entire
-  `Blocks` layout, theme, CSS, and event-chaining (`.click().then(...)`)
-  construct without error.
+- Frontend `vitest`, TypeScript, and optimized `next build` pass for the
+  minimal chat app and same-origin API proxy.
 
 What was **not** verified (no network access to these domains from the
 build sandbox): a real OpenAI completion, and a real Amadeus API response
@@ -337,7 +342,8 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
   already written against the real shape.
 - **Structured result cards**: populate `hotel_results`/`flight_results` in
   `_run_specialist`'s return dict (fields already exist, unused today),
-  then render them in `frontend/app.py` instead of/alongside markdown text.
+  then render them in `frontend/components/simple-chat.tsx` instead of/
+  alongside markdown text.
 - **Horizontal scaling**: swap `core/security.py`'s in-memory rate-limit
   dict and `MemorySaver` for Redis-backed equivalents — both are isolated
   behind small interfaces already.
