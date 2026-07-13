@@ -2,9 +2,12 @@ import type { StreamEvent } from "@/lib/sse"
 
 import type {
   Conversation,
+  McpServerName,
+  McpServerStatuses,
   RuntimeState,
   ServiceKey,
   ServiceState,
+  TripContext,
   ToolActivity,
   ToolStatus,
 } from "./types"
@@ -16,6 +19,15 @@ const SERVICE_LABELS: Record<ServiceKey, string> = {
   weather: "Weather MCP",
   currency: "Currency MCP",
   location: "Location MCP",
+}
+
+const SERVICE_SERVERS: Record<ServiceKey, McpServerName> = {
+  flight: "flight-mcp",
+  hotel: "hotel-mcp",
+  itinerary: "itinerary-mcp",
+  weather: "weather-mcp",
+  currency: "currency-mcp",
+  location: "location-mcp",
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -30,52 +42,83 @@ function serviceState(key: ServiceKey, status: ToolStatus): ServiceState {
   return { key, label: SERVICE_LABELS[key], status }
 }
 
-export function createRuntimeState(backendOnline = false): RuntimeState {
-  const supportedStatus: ToolStatus = backendOnline ? "idle" : "offline"
+export function createRuntimeState(
+  backendOnline = false,
+  mcpServers: McpServerStatuses = {},
+): RuntimeState {
+  function initialStatus(key: ServiceKey): ToolStatus {
+    if (!backendOnline) return "offline"
+    return mcpServers[SERVICE_SERVERS[key]] === "available" ? "idle" : "unavailable"
+  }
+
   return {
     activity: backendOnline ? "Ready" : "Backend offline",
     activeAgent: "TripWeaver router",
     backendOnline,
+    mcpServers,
     services: {
-      flight: serviceState("flight", supportedStatus),
-      hotel: serviceState("hotel", supportedStatus),
-      itinerary: serviceState("itinerary", "unavailable"),
-      weather: serviceState("weather", "unavailable"),
-      currency: serviceState("currency", "unavailable"),
-      location: serviceState("location", "unavailable"),
+      flight: serviceState("flight", initialStatus("flight")),
+      hotel: serviceState("hotel", initialStatus("hotel")),
+      itinerary: serviceState("itinerary", initialStatus("itinerary")),
+      weather: serviceState("weather", initialStatus("weather")),
+      currency: serviceState("currency", initialStatus("currency")),
+      location: serviceState("location", initialStatus("location")),
     },
   }
 }
 
-export function setBackendAvailability(runtime: RuntimeState, online: boolean): RuntimeState {
-  const next = createRuntimeState(online)
+export function setBackendAvailability(
+  runtime: RuntimeState,
+  online: boolean,
+  mcpServers: McpServerStatuses = runtime.mcpServers,
+): RuntimeState {
+  const next = createRuntimeState(online, mcpServers)
   return {
     ...next,
-    services: {
-      ...next.services,
-      flight: {
-        ...next.services.flight,
-        status: runtime.services.flight.status === "running" ? "running" : next.services.flight.status,
-      },
-      hotel: {
-        ...next.services.hotel,
-        status: runtime.services.hotel.status === "running" ? "running" : next.services.hotel.status,
-      },
-    },
+    services: Object.fromEntries(
+      (Object.keys(next.services) as ServiceKey[]).map((key) => [
+        key,
+        {
+          ...next.services[key],
+          status:
+            runtime.services[key].status === "running" && next.services[key].status === "idle"
+              ? "running"
+              : next.services[key].status,
+        },
+      ]),
+    ) as RuntimeState["services"],
   }
 }
 
-function describeTool(tool: string): { key: "flight" | "hotel"; activity: ToolActivity } {
-  const normalized = tool.toLocaleLowerCase()
-  const key = normalized.includes("hotel") ? "hotel" : "flight"
-  const action = normalized.includes("book") ? "booking" : "search"
-  const subject = key === "hotel" ? "Hotel" : "Flight"
+export function resetRuntimeState(runtime: RuntimeState) {
+  return createRuntimeState(runtime.backendOnline, runtime.mcpServers)
+}
+
+const TOOL_DETAILS: Record<string, { key: ServiceKey; label: string }> = {
+  list_flights: { key: "flight", label: "Flight overview" },
+  search_flights: { key: "flight", label: "Flight search" },
+  book_flight: { key: "flight", label: "Flight booking" },
+  list_hotels: { key: "hotel", label: "Hotel overview" },
+  search_hotels: { key: "hotel", label: "Hotel search" },
+  book_hotel: { key: "hotel", label: "Hotel booking" },
+  create_itinerary: { key: "itinerary", label: "Itinerary planning" },
+  get_current_weather: { key: "weather", label: "Current weather" },
+  get_weather_forecast: { key: "weather", label: "Weather forecast" },
+  convert_currency: { key: "currency", label: "Currency conversion" },
+  get_exchange_rate: { key: "currency", label: "Exchange rate" },
+  list_supported_currencies: { key: "currency", label: "Supported currencies" },
+  resolve_location: { key: "location", label: "Location lookup" },
+  search_places: { key: "location", label: "Place search" },
+}
+
+function describeTool(tool: string): { key: ServiceKey; activity: ToolActivity } {
+  const detail = TOOL_DETAILS[tool] ?? { key: "location" as const, label: "Travel tool" }
   return {
-    key,
+    key: detail.key,
     activity: {
       id: tool,
-      label: `${subject} ${action}`,
-      server: SERVICE_LABELS[key],
+      label: detail.label,
+      server: SERVICE_LABELS[detail.key],
       status: "running",
     },
   }
@@ -95,8 +138,54 @@ function activeAgent(node?: string) {
   const normalized = node?.toLocaleLowerCase() ?? ""
   if (normalized.includes("hotel")) return "Hotel agent"
   if (normalized.includes("flight")) return "Flight agent"
+  if (normalized.includes("itinerary")) return "Itinerary agent"
+  if (normalized.includes("weather")) return "Weather agent"
+  if (normalized.includes("currency")) return "Currency agent"
+  if (normalized.includes("location")) return "Location agent"
   if (normalized.includes("general")) return "General travel agent"
   return "TripWeaver router"
+}
+
+function dataRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function itineraryContext(current: TripContext, data: unknown): TripContext {
+  const itinerary = dataRecord(data)
+  if (!itinerary) return current
+
+  const destination =
+    typeof itinerary.destination === "string" && itinerary.destination.trim()
+      ? itinerary.destination
+      : current.destination
+  const dates =
+    typeof itinerary.start_date === "string" && typeof itinerary.end_date === "string"
+      ? `${itinerary.start_date} - ${itinerary.end_date}`
+      : current.dates
+  const travelers =
+    typeof itinerary.travelers === "number" && Number.isFinite(itinerary.travelers)
+      ? `${itinerary.travelers.toLocaleString()} travellers`
+      : current.travelers
+  const budgetData = dataRecord(itinerary.budget)
+  const budget =
+    typeof budgetData?.total === "number" && Number.isFinite(budgetData.total)
+      ? `${typeof budgetData.currency === "string" ? `${budgetData.currency} ` : ""}${budgetData.total.toLocaleString()}`
+      : current.budget
+  const interests = Array.isArray(itinerary.interests)
+    ? itinerary.interests.filter(
+        (interest): interest is string => typeof interest === "string" && Boolean(interest.trim()),
+      )
+    : []
+
+  return {
+    destination,
+    dates,
+    travelers,
+    budget,
+    preferences: interests.length ? interests : current.preferences,
+  }
 }
 
 export interface StreamState {
@@ -140,11 +229,30 @@ export function applyStreamEvent(
     runtime = {
       ...runtime,
       activity: status === "running" ? `${activity.label} in progress` : `${activity.label} ${status}`,
-      activeAgent: key === "hotel" ? "Hotel agent" : "Flight agent",
+      activeAgent: `${key.charAt(0).toUpperCase()}${key.slice(1)} agent`,
       services: {
         ...runtime.services,
         [key]: { ...runtime.services[key], status },
       },
+    }
+  } else if (event.type === "result") {
+    conversation = {
+      ...conversation,
+      tripContext:
+        event.result_type === "itinerary"
+          ? itineraryContext(conversation.tripContext, event.data)
+          : conversation.tripContext,
+      messages: conversation.messages.map((message) =>
+        message.id === assistantMessageId
+          ? {
+              ...message,
+              results: [
+                ...(message.results ?? []),
+                { type: event.result_type, tool: event.tool, data: event.data },
+              ],
+            }
+          : message,
+      ),
     }
   } else if (event.type === "token") {
     conversation = {

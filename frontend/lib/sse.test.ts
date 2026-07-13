@@ -21,4 +21,19 @@ describe("parseSseChunk", () => {
     ])
     expect(result.remainder).toBe("")
   })
+
+  it("parses structured result frames", () => {
+    const result = parseSseChunk(
+      'data: {"type":"result","result_type":"currency","tool":"convert_currency","data":{"converted_amount":42}}\n\n',
+    )
+
+    expect(result.events).toEqual([
+      {
+        type: "result",
+        result_type: "currency",
+        tool: "convert_currency",
+        data: { converted_amount: 42 },
+      },
+    ])
+  })
 })

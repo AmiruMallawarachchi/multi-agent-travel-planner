@@ -33,7 +33,18 @@ describe("TripWeaverApp", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         if (String(input).includes("/api/health")) {
-          return Response.json({ online: true, backend: "online" })
+          return Response.json({
+            online: true,
+            backend: "online",
+            mcp_servers: {
+              "hotel-mcp": "available",
+              "flight-mcp": "available",
+              "itinerary-mcp": "available",
+              "weather-mcp": "available",
+              "currency-mcp": "available",
+              "location-mcp": "available",
+            },
+          })
         }
         return sseResponse([
           '{"type":"session","session_id":"session-1"}',
@@ -56,6 +67,10 @@ describe("TripWeaverApp", () => {
     expect(screen.getByText("Trip context")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Search flights" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Search hotels" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Plan itinerary" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Check weather" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Convert currency" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Find places" })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText("Backend online")).toBeInTheDocument())
   })
 
@@ -105,18 +120,63 @@ describe("TripWeaverApp", () => {
     expect(screen.getByText("No conversations yet")).toBeInTheDocument()
   })
 
-  it("identifies unavailable roadmap tools and unsupported voice input", async () => {
+  it("activates travel-intelligence quick actions and handles unsupported voice input", async () => {
     const user = userEvent.setup()
     renderApp()
 
     await user.click(screen.getByRole("button", { name: "Check weather" }))
-    expect(
-      await screen.findByText(
-        "Weather MCP is not connected yet. Its status is shown as unavailable.",
-      ),
-    ).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: "Message TripWeaver" })).toHaveValue(
+      "Check the weather for my trip.",
+    )
+    expect(screen.queryByText("Soon")).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Voice input" }))
     expect(await screen.findByText("Voice input is not supported by this browser")).toBeInTheDocument()
+  })
+
+  it("opens a structured itinerary returned by the backend", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("/api/health")) {
+          return Response.json({
+            online: true,
+            backend: "online",
+            mcp_servers: {
+              "hotel-mcp": "available",
+              "flight-mcp": "available",
+              "itinerary-mcp": "available",
+              "weather-mcp": "available",
+              "currency-mcp": "available",
+              "location-mcp": "available",
+            },
+          })
+        }
+        return sseResponse([
+          '{"type":"session","session_id":"session-1"}',
+          '{"type":"tool","status":"INVOKED","tool":"create_itinerary"}',
+          '{"type":"result","result_type":"itinerary","tool":"create_itinerary","data":{"destination":"Tokyo","start_date":"2026-12-10","end_date":"2026-12-11","duration_days":2,"travelers":2,"pace":"balanced","days":[{"day_number":1,"date":"2026-12-10","title":"Day 1 in Tokyo","items":[{"name":"Food planning block in Tokyo","time_slot":"morning","duration_minutes":120,"is_placeholder":true}]}],"disclaimer":"Confirm specific venues before relying on this itinerary."}}',
+          '{"type":"token","content":"Your itinerary is ready."}',
+          '{"type":"done"}',
+        ])
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Message TripWeaver" }),
+      "Plan Tokyo",
+    )
+    await user.click(screen.getByRole("button", { name: "Send message" }))
+
+    await user.click(
+      await screen.findByRole("button", { name: "View full itinerary" }),
+    )
+    expect(
+      screen.getByRole("dialog", { name: "Tokyo itinerary" }),
+    ).toBeInTheDocument()
+    expect(screen.getByText("Day 1 in Tokyo")).toBeInTheDocument()
+    expect(screen.getByText("Food planning block in Tokyo")).toBeInTheDocument()
   })
 })

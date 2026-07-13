@@ -4,7 +4,22 @@ import { GET } from "./route"
 
 describe("GET /api/health", () => {
   it("reports backend availability from the real health check", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "ok" })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          status: "ok",
+          mcp_servers: {
+            "hotel-mcp": "available",
+            "flight-mcp": "available",
+            "itinerary-mcp": "available",
+            "weather-mcp": "available",
+            "currency-mcp": "available",
+            "location-mcp": "unavailable",
+          },
+        }),
+      ),
+    )
 
     const response = await GET()
 
@@ -13,6 +28,14 @@ describe("GET /api/health", () => {
       online: true,
       backend: "online",
       service: "tripweaver-frontend",
+      mcp_servers: {
+        "hotel-mcp": "available",
+        "flight-mcp": "available",
+        "itinerary-mcp": "available",
+        "weather-mcp": "available",
+        "currency-mcp": "available",
+        "location-mcp": "unavailable",
+      },
     })
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:8000/health",
@@ -25,6 +48,10 @@ describe("GET /api/health", () => {
 
     const response = await GET()
 
-    expect(await response.json()).toMatchObject({ online: true, backend: "offline" })
+    expect(await response.json()).toMatchObject({
+      online: true,
+      backend: "offline",
+      mcp_servers: {},
+    })
   })
 })

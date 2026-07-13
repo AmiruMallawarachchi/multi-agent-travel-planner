@@ -21,6 +21,11 @@ import {
 import { toast } from "sonner"
 
 import { Markdown } from "@/components/prompt-kit/markdown"
+import {
+  ItineraryDetails,
+  StructuredResultPreview,
+  itineraryDestination,
+} from "@/components/tripweaver/structured-results"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -47,6 +52,7 @@ import type {
   ChatMessage,
   Conversation,
   RuntimeState,
+  StructuredResult,
   ToolActivity,
 } from "@/features/tripweaver/types"
 import { cn } from "@/lib/utils"
@@ -117,9 +123,10 @@ function MessageBubble({
 }: {
   message: ChatMessage
   showToolActivity: boolean
-  onOpenItinerary: (message: ChatMessage) => void
+  onOpenItinerary: (message: ChatMessage, result?: StructuredResult) => void
 }) {
   const isUser = message.role === "user"
+  const itineraryResult = message.results?.find((result) => result.type === "itinerary")
 
   async function copyMessage() {
     try {
@@ -159,6 +166,15 @@ function MessageBubble({
             </span>
           )}
 
+          {!isUser && message.results?.length
+            ? message.results.map((result, index) => (
+                <StructuredResultPreview
+                  key={`${result.tool}-${result.type}-${index}`}
+                  result={result}
+                />
+              ))
+            : null}
+
           {message.attachments?.length ? (
             <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
               {message.attachments.map((attachment) => (
@@ -189,13 +205,13 @@ function MessageBubble({
                 </TooltipTrigger>
                 <TooltipContent>Copy response</TooltipContent>
               </Tooltip>
-              {looksLikeItinerary(message.content) ? (
+              {itineraryResult || looksLikeItinerary(message.content) ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className="ml-1"
-                  onClick={() => onOpenItinerary(message)}
+                  onClick={() => onOpenItinerary(message, itineraryResult)}
                 >
                   <FileText aria-hidden="true" />
                   View full itinerary
@@ -290,7 +306,10 @@ export function ChatWorkspace({
   onSend,
   onStartVoice,
 }: ChatWorkspaceProps) {
-  const [itineraryMessage, setItineraryMessage] = useState<ChatMessage | null>(null)
+  const [itinerarySelection, setItinerarySelection] = useState<{
+    message: ChatMessage
+    result?: StructuredResult
+  } | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -334,7 +353,9 @@ export function ChatWorkspace({
               key={message.id}
               message={message}
               showToolActivity={showToolActivity}
-              onOpenItinerary={setItineraryMessage}
+              onOpenItinerary={(selectedMessage, result) =>
+                setItinerarySelection({ message: selectedMessage, result })
+              }
             />
           ))}
           <div ref={bottomRef} />
@@ -444,13 +465,24 @@ export function ChatWorkspace({
         </p>
       </div>
 
-      <Dialog open={Boolean(itineraryMessage)} onOpenChange={(open) => !open && setItineraryMessage(null)}>
+      <Dialog
+        open={Boolean(itinerarySelection)}
+        onOpenChange={(open) => !open && setItinerarySelection(null)}
+      >
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-lg">
           <DialogHeader>
-            <DialogTitle>Full itinerary</DialogTitle>
+            <DialogTitle>
+              {itinerarySelection?.result
+                ? `${itineraryDestination(itinerarySelection.result.data)} itinerary`
+                : "Full itinerary"}
+            </DialogTitle>
             <DialogDescription>{conversation.title}</DialogDescription>
           </DialogHeader>
-          {itineraryMessage ? <Markdown>{itineraryMessage.content}</Markdown> : null}
+          {itinerarySelection?.result ? (
+            <ItineraryDetails data={itinerarySelection.result.data} />
+          ) : itinerarySelection?.message ? (
+            <Markdown>{itinerarySelection.message.content}</Markdown>
+          ) : null}
         </DialogContent>
       </Dialog>
     </section>

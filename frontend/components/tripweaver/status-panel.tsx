@@ -77,7 +77,6 @@ interface StatusPanelProps {
   runtime: RuntimeState
   tripContext: TripContext
   onQuickAction: (prompt: string) => void
-  onUnavailableAction: (feature: string) => void
   className?: string
 }
 
@@ -85,7 +84,6 @@ export function StatusPanel({
   runtime,
   tripContext,
   onQuickAction,
-  onUnavailableAction,
   className,
 }: StatusPanelProps) {
   return (
@@ -154,33 +152,39 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="h-9 w-full justify-start bg-background text-muted-foreground"
-            onClick={() => onUnavailableAction("Itinerary MCP")}
+            className="h-9 w-full justify-start bg-background"
+            onClick={() => onQuickAction("Plan a day-by-day itinerary for my trip.")}
             aria-label="Plan itinerary"
           >
             <Route aria-hidden="true" />
             Plan itinerary
-            <span className="ml-auto text-[10px] uppercase">Soon</span>
           </Button>
           <Button
             variant="outline"
-            className="h-9 w-full justify-start bg-background text-muted-foreground"
-            onClick={() => onUnavailableAction("Weather MCP")}
+            className="h-9 w-full justify-start bg-background"
+            onClick={() => onQuickAction("Check the weather for my trip.")}
             aria-label="Check weather"
           >
             <CloudSun aria-hidden="true" />
             Check weather
-            <span className="ml-auto text-[10px] uppercase">Soon</span>
           </Button>
           <Button
             variant="outline"
-            className="h-9 w-full justify-start bg-background text-muted-foreground"
-            onClick={() => onUnavailableAction("Currency MCP")}
+            className="h-9 w-full justify-start bg-background"
+            onClick={() => onQuickAction("Convert currency for my trip.")}
             aria-label="Convert currency"
           >
             <Banknote aria-hidden="true" />
             Currency converter
-            <span className="ml-auto text-[10px] uppercase">Soon</span>
+          </Button>
+          <Button
+            variant="outline"
+            className="h-9 w-full justify-start bg-background"
+            onClick={() => onQuickAction("Find attractions and restaurants near my destination.")}
+            aria-label="Find places"
+          >
+            <MapPinned aria-hidden="true" />
+            Find places
           </Button>
         </div>
       </section>

@@ -4,6 +4,32 @@ export type ToolStatus = "idle" | "running" | "completed" | "failed" | "offline"
 
 export type ServiceKey = "flight" | "hotel" | "itinerary" | "weather" | "currency" | "location"
 
+export type McpServerName =
+  | "flight-mcp"
+  | "hotel-mcp"
+  | "itinerary-mcp"
+  | "weather-mcp"
+  | "currency-mcp"
+  | "location-mcp"
+
+export type McpServerStatus = "available" | "unavailable"
+
+export type McpServerStatuses = Partial<Record<McpServerName, McpServerStatus>>
+
+export type StructuredResultType =
+  | "flight"
+  | "hotel"
+  | "itinerary"
+  | "weather"
+  | "currency"
+  | "location"
+
+export interface StructuredResult {
+  type: StructuredResultType
+  tool: string
+  data: unknown
+}
+
 export interface Attachment {
   id: string
   name: string
@@ -26,6 +52,7 @@ export interface ChatMessage {
   createdAt: string
   attachments?: Pick<Attachment, "id" | "name" | "type" | "size">[]
   tools?: ToolActivity[]
+  results?: StructuredResult[]
 }
 
 export interface TripContext {
@@ -56,6 +83,7 @@ export interface RuntimeState {
   activity: string
   activeAgent: string
   backendOnline: boolean
+  mcpServers: McpServerStatuses
   services: Record<ServiceKey, ServiceState>
 }
 

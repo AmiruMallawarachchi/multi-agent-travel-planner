@@ -2,6 +2,12 @@ export type StreamEvent =
   | { type: "session"; session_id: string }
   | { type: "status"; state: string; node?: string }
   | { type: "tool"; status: string; tool: string }
+  | {
+      type: "result"
+      result_type: "flight" | "hotel" | "itinerary" | "weather" | "currency" | "location"
+      tool: string
+      data: unknown
+    }
   | { type: "token"; content: string }
   | { type: "error"; message: string }
   | { type: "done" }

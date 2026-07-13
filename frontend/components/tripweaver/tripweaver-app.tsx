@@ -26,6 +26,7 @@ import {
 import {
   applyStreamEvent,
   createRuntimeState,
+  resetRuntimeState,
   setBackendAvailability,
 } from "@/features/tripweaver/stream-state"
 import { extractTripContext } from "@/features/tripweaver/trip-context"
@@ -34,6 +35,7 @@ import type {
   ChatMessage,
   Conversation,
   RuntimeState,
+  McpServerStatuses,
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
@@ -165,11 +167,15 @@ export function TripWeaverApp() {
     async function checkBackend() {
       try {
         const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
-        const health = (await response.json()) as { backend?: string; online?: boolean }
+        const health = (await response.json()) as {
+          backend?: string
+          online?: boolean
+          mcp_servers?: McpServerStatuses
+        }
         const online = response.ok && health.online === true && health.backend === "online"
         setState((current) => ({
           ...current,
-          runtime: setBackendAvailability(current.runtime, online),
+          runtime: setBackendAvailability(current.runtime, online, health.mcp_servers ?? {}),
         }))
       } catch {
         if (!controller.signal.aborted) {
@@ -182,7 +188,11 @@ export function TripWeaverApp() {
     }
 
     void checkBackend()
-    return () => controller.abort()
+    const healthInterval = window.setInterval(() => void checkBackend(), 15_000)
+    return () => {
+      window.clearInterval(healthInterval)
+      controller.abort()
+    }
   }, [])
 
   useEffect(
@@ -200,7 +210,7 @@ export function TripWeaverApp() {
     setState((current) => ({
       conversations: [conversation, ...current.conversations.filter(hasUserMessage)],
       activeConversationId: conversation.id,
-      runtime: createRuntimeState(current.runtime.backendOnline),
+      runtime: resetRuntimeState(current.runtime),
     }))
     setInput("")
     setAttachments([])
@@ -215,7 +225,7 @@ export function TripWeaverApp() {
     setState((current) => ({
       conversations: [conversation],
       activeConversationId: conversation.id,
-      runtime: createRuntimeState(current.runtime.backendOnline),
+      runtime: resetRuntimeState(current.runtime),
     }))
     setInput("")
     setAttachments([])
@@ -227,7 +237,7 @@ export function TripWeaverApp() {
     setState((current) => ({
       ...current,
       activeConversationId: conversationId,
-      runtime: createRuntimeState(current.runtime.backendOnline),
+      runtime: resetRuntimeState(current.runtime),
     }))
     setInput("")
     setAttachments([])
@@ -301,6 +311,7 @@ export function TripWeaverApp() {
       content: "",
       createdAt: now,
       tools: [],
+      results: [],
     }
     const requestMessage = [
       content,
@@ -323,7 +334,7 @@ export function TripWeaverApp() {
             }
           : conversation,
       ),
-      runtime: createRuntimeState(current.runtime.backendOnline),
+      runtime: resetRuntimeState(current.runtime),
     }))
     setInput("")
     setAttachments([])
@@ -423,9 +434,6 @@ export function TripWeaverApp() {
         setInput(prompt)
         setStatusOpen(false)
       }}
-      onUnavailableAction={(feature) =>
-        toast.info(`${feature} is not connected yet. Its status is shown as unavailable.`)
-      }
     />
   )
 
