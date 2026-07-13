@@ -9,7 +9,7 @@ already made here, and update this file whenever you make a new one.
 Companion docs, don't duplicate their content here:
 - `README.md` — quickstart, repo layout, deploy steps
 - `SECURITY.md` — full threat table and security rationale
-- `MCP_SETUP.md` — Amadeus credentials, running/deploying the MCP servers
+- `MCP_SETUP.md` — SerpApi credentials, search contracts, and MCP deployment
 
 ---
 
@@ -18,8 +18,8 @@ Companion docs, don't duplicate their content here:
 A traveller chats in natural language. A LangGraph workflow classifies
 intent and routes to one of three specialist agents (General QA, Hotel,
 Flight). The Hotel and Flight agents reach real external data **only**
-through their own MCP server, which wraps the Amadeus for Developers
-self-service test API. Responses stream token-by-token to a Gradio
+through their own MCP server, which wraps SerpApi's Google Hotels and Google
+Flights engines. Responses stream token-by-token to a Gradio
 frontend over Server-Sent Events, with a live agent-activity indicator.
 
 Built against the "MCP-Based Multi-Agent Travel Planner" Extension Sprint
@@ -36,11 +36,11 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D3 | Tools scoped **per agent, per MCP server** via `client.session(name)` + `load_mcp_tools`, not a shared tool bag | `MultiServerMCPClient.get_tools()` aggregates all servers with no per-server filter (confirmed against the installed `langchain-mcp-adapters==0.3.0`) — session-scoping is the documented way to get an agent-specific tool list, and it's what makes "Hotel agent can't call a flight tool" true by construction, not by prompt instruction | Bind all tools to every agent + rely on the prompt to self-restrict — rejected, not actually decoupled |
 | D4 | Standalone **`fastmcp`** package (v3.x) for both MCP servers, not the bundled `mcp[cli]` SDK | Confirmed working `host`/`port` kwargs on `mcp.run(transport="http", ...)`, which Railway's dynamic `$PORT` needs; actively the more current recommended path as of this build | Bundled `mcp.server.fastmcp.FastMCP` — also viable, more ceremony for host/port binding |
 | D5 | Transport string **`"http"`** (streamable HTTP) on both client and server config | Matches the current `fastmcp`/`langchain-mcp-adapters` documented examples; consistent terminology end-to-end avoids a "http" vs "streamable-http" mismatch bug | `"streamable-http"` alias — also valid, chose the shorter current-recommended form |
-| D6 | Hotel/flight **search** hits the real Amadeus test API; **booking is simulated** (`"simulated": true` in every confirmation) | Real Amadeus booking needs PCI-scope payment + full traveler documents, out of scope; simulated booking still returns the exact shape a real provider would, so swapping one in later only touches `amadeus_client.py` | Fully mock search too — rejected, real search data is much stronger for the viva; Real booking — rejected, scope/compliance |
+| D6 | Hotel/flight **search** uses SerpApi's `google_hotels` and `google_flights` engines; **booking is simulated** (`"simulated": true` in every confirmation) | SerpApi provides search data, not TripWeaver's real payment/booking workflow; another search provider remains isolated to `serpapi_client.py` | Fully mock search too — rejected, live provider data is stronger for the viva; real booking — rejected, scope/compliance |
 | D7 | **Circuit breaker** per MCP server (3 failures → 60s cooldown) in `agents/mcp_client.py` | SRS §5 resilience requirement — stops every turn paying a timeout against a server that's already known-down | Naive retry-per-call — rejected, doesn't bound latency |
 | D8 | **`MemorySaver`** checkpointer, keyed by `session_id` as LangGraph `thread_id` | Gives cross-turn memory (SRS §9 stretch: "refine without repeating themselves") essentially for free | Custom Redis/Postgres state store — deferred, see §13 roadmap for durability across restarts |
 | D9 | **Untrusted-data fencing** (`<tool_data>...</tool_data>`) + a shared `GUARDRAILS` prompt block on every agent | Defends against indirect prompt injection carried in a tool result — see `SECURITY.md` §3 for the full rationale and its limits | Trusting tool output implicitly — rejected as unsafe for an MCP-based system by definition |
-| D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `_run_specialist` | Bounds worst-case OpenAI/Amadeus cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
+| D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `_run_specialist` | Bounds worst-case OpenAI/SerpApi cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
 | D13 | **Railway** for backend + both MCP servers (3 services, 1 project), **Hugging Face Spaces** for the Gradio frontend | Matches SRS §1.4's suggested stack; Railway multi-service project mirrors an existing, working deployment pattern | Render, Fly.io — equally valid, not chosen only for consistency |
@@ -106,11 +106,11 @@ backend/
 
 mcp_servers/
   hotel_mcp/
-    amadeus_client.py            Owns Amadeus hotel request/response shape (D6)
+    serpapi_client.py            Owns SerpApi hotel transport + normalized results (D6)
     server.py                     FastMCP app: list_hotels, search_hotels, book_hotel
     requirements.txt / Dockerfile / railway.json / .env.example
   flight_mcp/
-    amadeus_client.py            Owns Amadeus flight request/response shape (D6)
+    serpapi_client.py            Owns SerpApi flight transport + normalized results (D6)
     server.py                     FastMCP app: list_flights, search_flights, book_flight
     requirements.txt / Dockerfile / railway.json / .env.example
 
@@ -198,8 +198,8 @@ orchestration" **[ROADMAP]** stretch item, see §13).
 
 | Server | Tools | Backing | Booking |
 |---|---|---|---|
-| `hotel-mcp` | `list_hotels(city_code)`, `search_hotels(city_code, check_in, check_out, adults)`, `book_hotel(offer_id, guest_name)` | Amadeus `/v1/reference-data/locations/hotels/by-city`, `/v3/shopping/hotel-offers` | Simulated (D6) |
-| `flight-mcp` | `list_flights(origin, destination)`, `search_flights(origin, destination, departure_date, adults)`, `book_flight(offer_id, traveller_name)` | Amadeus `/v2/shopping/flight-offers` | Simulated (D6) |
+| `hotel-mcp` | `list_hotels(destination)`, `search_hotels(destination, check_in_date, check_out_date, adults, children, currency, min_price, max_price, rating)`, `book_hotel(offer_id, guest_name)` | SerpApi `engine=google_hotels`; normalized from `properties` | Simulated (D6) |
+| `flight-mcp` | `list_flights(departure_id, arrival_id)`, `search_flights(departure_id, arrival_id, outbound_date, return_date, adults, children, travel_class, currency, max_price)`, `book_flight(offer_id, traveller_name)` | SerpApi `engine=google_flights`; normalized from `best_flights` + `other_flights` | Simulated (D6) |
 
 Every tool returns `{"ok": bool, ...}` — never raises to the MCP transport
 layer — so the calling agent always gets structured data to reason about,
@@ -214,7 +214,7 @@ Full detail in `SECURITY.md`. Summary of what's implemented:
 - API-key auth (`X-API-Key`) + sliding-window rate limiting on `/session`
   and `/chat/stream`
 - Three-layer input validation (Pydantic → `sanitize_user_message` →
-  per-tool validation in each `amadeus_client.py`)
+  per-tool validation in each `serpapi_client.py`)
 - Unguessable, server-issued session ids
 - CORS locked to an explicit `ALLOWED_ORIGINS` allowlist
 - Untrusted-data fencing + guardrail prompt against tool-result prompt
@@ -235,7 +235,7 @@ Full detail in `SECURITY.md`. Summary of what's implemented:
 | `ALLOWED_ORIGINS` | backend | comma-separated CORS allowlist |
 | `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS` | backend | rate limiter tuning |
 | `MAX_MESSAGE_LENGTH` | backend | input length cap |
-| `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, `AMADEUS_BASE_URL` | both MCP servers | Amadeus auth |
+| `SERPAPI_API_KEY`, `SERPAPI_BASE_URL` | both MCP servers | SerpApi query authentication and endpoint |
 | `PORT` | backend + both MCP servers | injected by Railway; each service reads it itself |
 | `BACKEND_URL` | frontend | backend's public URL |
 | `BACKEND_API_KEY` | frontend | must equal one value in backend's `TRIPWEAVER_API_KEYS` |
@@ -254,7 +254,7 @@ services is independently buildable from its own `Dockerfile` +
 
 ## 11. Testing strategy
 
-`backend/tests/` — 26 tests, all offline:
+`backend/tests/` — 37 tests, all offline:
 - `test_graph.py` — routing correctness (every `Intent` value, invalid-
   label fallback to `CLARIFY`), graceful degradation when a tool server is
   down, a failing tool call being recorded without crashing, and the
@@ -263,8 +263,12 @@ services is independently buildable from its own `Dockerfile` +
   (including a SQL-injection-shaped string, deliberately), rate-limit
   trip/independent-buckets, and all four API-key auth branches.
 
+`mcp_servers/*/tests/` — 32 offline SerpApi contract tests covering request
+mapping, normalized results, input validation, result caps, missing arrays,
+provider errors, and API-key redaction without consuming provider credits.
+
 LLM and MCP tool calls are mocked (`unittest.mock`) — no `OPENAI_API_KEY`
-or Amadeus credentials are needed to run the suite or in CI.
+or SerpApi credentials are needed to run the suites or in CI.
 
 ---
 
@@ -273,19 +277,20 @@ or Amadeus credentials are needed to run the suite or in CI.
 - `pip install` of every `requirements.txt` (backend, both MCP servers,
   frontend) into clean venvs — no dependency conflicts, versions in §2.
 - `py_compile` of every `.py` file in the repo.
-- `pytest` — 26/26 passing against the real installed `langgraph`/
+- `pytest` — 37/37 passing against the real installed `langgraph`/
   `langchain-*` versions above (not just mocked at the import level —
   the actual graph, node, and security code executes).
+- SerpApi contract tests — 32/32 passing with `httpx.MockTransport`; no live
+  request or provider credit is used.
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
   — confirmed `['list_hotels', 'search_hotels', 'book_hotel']` and
   `['list_flights', 'search_flights', 'book_flight']`.
-- `book_hotel` / `book_flight` called end-to-end with no Amadeus
-  credentials configured — confirmed simulated booking works with zero
-  external dependencies.
-- `search_hotels` called with a malformed `city_code` — confirmed
+- `book_hotel_offer` / `book_flight_offer` called in offline tests — confirmed
+  simulated booking works with zero provider dependencies.
+- `search_hotels` called with malformed dates/query values — confirmed
   input validation rejects it before any network call.
-- `list_hotels` called with no Amadeus credentials — confirmed a graceful
-  `{"ok": false, "error": "..."}`, never an exception.
+- Both clients exercised with an explicitly empty SerpApi key — confirmed a
+  controlled configuration error before any network request.
 - Full FastAPI app booted with `uvicorn` and hit with `curl`:
   `/health` (200, no auth), `/session` (401 without key, 200 with),
   `/chat/stream` (422 on empty message, 401 without key), a CORS
@@ -298,11 +303,9 @@ or Amadeus credentials are needed to run the suite or in CI.
   `Blocks` layout, theme, CSS, and event-chaining (`.click().then(...)`)
   construct without error.
 
-What was **not** verified (no network access to these domains from the
-build sandbox): a real OpenAI completion, and a real Amadeus API response
-with live credentials. Both are exercised through their respective
-client-library call sites, which are the same code path as everything
-above — the only untested part is the third-party HTTP round trip itself.
+What was **not** verified in this change: a real OpenAI completion or a live
+SerpApi response. No real SerpApi key was read and no provider credit was used;
+the unverified portion is the third-party HTTP round trip with a live account.
 
 ---
 
@@ -319,7 +322,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 | Item | Status |
 |---|---|
 | Memory / context across turns | Done (D8, `MemorySaver`) |
-| Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §6 documents the exact steps |
+| Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §9 documents the exact steps |
 | Richer orchestration (combined hotel+flight itinerary in one turn) | `[ROADMAP]` — would add a `plan` node that fans out to both specialists and merges before responding |
 | Observability (structured tracing) | Partial — structured request-id logging exists in `main.py`; no distributed tracing (e.g. LangSmith) wired up |
 | Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) and `booking_confirmation` as HTML cards |
@@ -328,13 +331,13 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 
 ## 14. Extension points
 
-- **New MCP server**: `MCP_SETUP.md` §6.
+- **New MCP server**: `MCP_SETUP.md` §9.
 - **New agent**: add a node + prompt pair, one conditional-edge branch in
   `graph.py`, extend `Intent` in `entity.py`.
 - **Swap LLM provider**: edit `agents/llm.py` only.
-- **Real payment/booking**: edit `amadeus_client.py`'s `book_*_offer`
+- **Real payment/booking**: replace `serpapi_client.py`'s `book_*_offer`
   functions only — the tool interface (`server.py`) and every agent are
-  already written against the real shape.
+  already written against the simulated confirmation shape.
 - **Structured result cards**: populate `hotel_results`/`flight_results` in
   `_run_specialist`'s return dict (fields already exist, unused today),
   then render them in `frontend/app.py` instead of/alongside markdown text.

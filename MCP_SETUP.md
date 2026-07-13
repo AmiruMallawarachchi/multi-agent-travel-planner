@@ -1,120 +1,165 @@
-# MCP_SETUP.md
+# MCP server setup
 
-How to get the two MCP servers (`hotel-mcp`, `flight-mcp`) running locally
-and deployed, including getting real Amadeus test credentials.
+How to run and deploy TripWeaver's hotel and flight MCP servers with
+SerpApi-backed Google Hotels and Google Flights search.
 
-## 1. What these are
+## 1. Services and tools
 
-Two independent, standalone processes (SRS section 7: "MCP servers run as
-their own processes"). Each is a `fastmcp` app exposing three tools over
-streamable HTTP at `/mcp`:
+The MCP servers are independent `fastmcp` processes. They keep the existing
+tool names and streamable HTTP `/mcp` endpoints so the backend integration does
+not change.
 
-| Server | Tools | Port (local) |
-|---|---|---|
+| Server | Tools | Local port |
+|---|---|---:|
 | `hotel-mcp` | `list_hotels`, `search_hotels`, `book_hotel` | 8001 |
 | `flight-mcp` | `list_flights`, `search_flights`, `book_flight` | 8002 |
 
-Search hits Amadeus's real self-service **test** API (live data, sandboxed
-environment). Booking is a simulated, realistically-shaped confirmation -
-see the docstring at the top of each `amadeus_client.py` for why.
+Searches use SerpApi. Bookings remain simulated and always include
+`"simulated": true`; TripWeaver does not perform real travel booking or payment.
 
-## 2. Get Amadeus test credentials (free, ~2 minutes)
+## 2. Get a SerpApi key
 
-1. Go to https://developers.amadeus.com and create an account.
-2. Create a new app (Self-Service). You'll get an **API Key** (=
-   `AMADEUS_CLIENT_ID`) and **API Secret** (= `AMADEUS_CLIENT_SECRET`)
-   immediately - no approval wait, these are test-environment credentials
-   by default.
-3. The test environment has a generous free quota and real (if limited)
-   inventory - plenty for development and for a viva demo.
-4. One app's credentials work for both `hotel-mcp` and `flight-mcp`.
+1. Create or sign in to a SerpApi account at https://serpapi.com.
+2. Open https://serpapi.com/manage-api-key and copy your private API key.
+3. Use the same key for both MCP services.
+4. Never paste the key into chat, commit it, or expose it to the frontend.
 
-## 3. Run locally
+Create `mcp_servers/hotel_mcp/.env`:
 
-Each server is self-contained:
+```dotenv
+SERPAPI_API_KEY=your-private-serpapi-key
+SERPAPI_BASE_URL=https://serpapi.com/search.json
+PORT=8001
+```
 
-```bash
+Create `mcp_servers/flight_mcp/.env`:
+
+```dotenv
+SERPAPI_API_KEY=your-private-serpapi-key
+SERPAPI_BASE_URL=https://serpapi.com/search.json
+PORT=8002
+```
+
+The `.env` files are ignored by Git. The committed `.env.example` files contain
+placeholders only.
+
+## 3. Flight search contract
+
+`search_flights` calls SerpApi with `engine=google_flights` and supports:
+
+Official parameters and response examples: https://serpapi.com/google-flights-api.
+
+- `departure_id`, `arrival_id`: three-letter IATA airport codes
+- `outbound_date`: required `YYYY-MM-DD` date
+- `return_date`: optional; present means round trip
+- `adults`, `children`: maximum nine passengers in total
+- `travel_class`: `1` economy, `2` premium economy, `3` business, `4` first
+- `currency`: three-letter currency code such as `USD`
+- `max_price`: optional maximum ticket price
+
+The client sets `type=1` for a round trip and `type=2` for a one-way trip. It
+combines `best_flights` and `other_flights`, then returns at most ten normalized
+options. Every option includes its first airline/flight number, endpoint
+airports and times, all segments, layovers, total duration, price, currency,
+travel class, and `booking_token` when SerpApi supplies one.
+
+## 4. Hotel search contract
+
+`search_hotels` calls SerpApi with `engine=google_hotels` and supports:
+
+Official parameters and response examples: https://serpapi.com/google-hotels-api.
+
+- `destination`: a place or complete hotel query
+- `check_in_date`, `check_out_date`: required `YYYY-MM-DD` dates
+- `adults`, `children`: maximum ten guests in total
+- `currency`: three-letter currency code such as `USD`
+- `min_price`, `max_price`: optional nightly-price filters
+- `rating`: optional SerpApi filter `7` (3.5+), `8` (4.0+), or `9` (4.5+)
+
+A plain destination such as `Dubai` becomes the query `Hotels in Dubai`; a
+complete query such as `Hotels near Dubai Marina` is preserved. The client reads
+`properties` and returns at most ten normalized records containing the name,
+description, nightly price, currency, rating, review count, hotel class,
+amenities, primary image, coordinates, and `property_token`.
+
+## 5. Run locally
+
+Use one terminal per service:
+
+```powershell
 cd mcp_servers/hotel_mcp
-cp .env.example .env        # fill in AMADEUS_CLIENT_ID / AMADEUS_CLIENT_SECRET
-pip install -r requirements.txt
-python server.py            # serves http://localhost:8001/mcp
+..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
+..\..\.venv\Scripts\python.exe server.py
 ```
 
-```bash
+```powershell
 cd mcp_servers/flight_mcp
-cp .env.example .env        # same Amadeus app's credentials
-pip install -r requirements.txt
-python server.py            # serves http://localhost:8002/mcp
+..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
+..\..\.venv\Scripts\python.exe server.py
 ```
 
-Or run everything (both MCP servers + backend + frontend) together:
+The existing backend configuration remains unchanged:
 
-```bash
-docker compose up --build
+```dotenv
+HOTEL_MCP_URL=http://localhost:8001/mcp
+FLIGHT_MCP_URL=http://localhost:8002/mcp
 ```
 
-## 4. Verify a server is actually working
+You can also start all services with `docker compose up --build` after every
+service's local `.env` file is configured.
 
-With the server running:
+## 6. Verify without spending credits
 
-```bash
-python -c "
-import asyncio
-from fastmcp import Client
+The provider tests use `httpx.MockTransport`; they never contact SerpApi:
 
-async def main():
-    async with Client('http://localhost:8001/mcp') as client:
-        tools = await client.list_tools()
-        print([t.name for t in tools])
-        result = await client.call_tool('list_hotels', {'city_code': 'PAR'})
-        print(result)
-
-asyncio.run(main())
-"
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q `
+  mcp_servers/flight_mcp/tests/test_serpapi_client.py `
+  mcp_servers/hotel_mcp/tests/test_hotel_serpapi_client.py
 ```
 
-You should see `['list_hotels', 'search_hotels', 'book_hotel']` and either a
-real list of Paris hotels (credentials configured correctly) or a graceful
-`{"ok": false, "error": "..."}` (credentials missing/wrong) - never a stack
-trace or a hang, either way. That graceful-failure behaviour is exactly
-what SRS section 5 asks for, and it's a good thing to demonstrate live in
-the viva by temporarily removing the env var.
+To inspect the live MCP tool schema without making a provider request:
 
-## 5. How the backend discovers these servers
+```powershell
+cd mcp_servers/flight_mcp
+..\..\.venv\Scripts\python.exe -c "import asyncio; from server import mcp; print([tool.name for tool in asyncio.run(mcp.list_tools())])"
+```
 
-`backend/agents/mcp_client.py` reads `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` from
-env and loads each server's tools **scoped to that server only**, via
-`langchain-mcp-adapters`' `client.session(server_name)` +
-`load_mcp_tools(session)`. This is the actual mechanism behind the "Hotel
-Agent can never call a flight tool" design decision (SRS section 2) - it's
-not a prompt instruction, the tool literally isn't in that agent's tool
-list.
+Only run a live search after confirming the dates and understanding that it may
+consume SerpApi account credits. Missing credentials and provider errors return
+structured `{ "ok": false, "error": "..." }` tool results rather than crashing
+the MCP process.
 
-## 6. Adding a new MCP server (e.g. the "activities" stretch goal)
+## 7. Backend discovery
 
-1. Copy `mcp_servers/hotel_mcp/` as a template - keep the same shape
-   (`server.py` + a `*_client.py` that owns the third-party request/response
-   shape + its own `requirements.txt`/`Dockerfile`/`railway.json`).
-2. Add its URL to `backend/agents/mcp_client.py`'s `_client` config dict.
-3. Add one node + one prompt in `agents/nodes.py` / `agents/prompts.py`,
-   and one branch in `agents/graph.py`'s conditional edges.
+`backend/agents/mcp_client.py` reads `HOTEL_MCP_URL` and `FLIGHT_MCP_URL` and
+loads tools within a server-specific MCP session. The hotel agent cannot call
+flight tools, and the flight agent cannot call hotel tools, by construction.
 
-No existing agent code changes - this is the decoupling SRS section 9-E1
-asks you to prove, demonstrated by doing it.
+## 8. Railway deployment
 
-## 7. Deploying (Railway)
+Deploy each MCP directory as its own Railway service:
 
-Each MCP server is its own Railway service, deployed from its own
-subdirectory:
+1. Set the hotel service root to `mcp_servers/hotel_mcp`.
+2. Set `SERPAPI_API_KEY` and
+   `SERPAPI_BASE_URL=https://serpapi.com/search.json` in Railway Variables.
+3. Let Railway provide `PORT` automatically.
+4. Repeat with root `mcp_servers/flight_mcp` and the same SerpApi key.
+5. Put each public `/mcp` URL in the backend's `HOTEL_MCP_URL` and
+   `FLIGHT_MCP_URL` variables.
 
-1. Railway dashboard -> New Project -> Deploy from GitHub repo.
-2. **Add service** -> set **Root Directory** to `mcp_servers/hotel_mcp`
-   (Railway builds using the `Dockerfile` + `railway.json` in that folder).
-3. Set the service's Variables: `AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`,
-   `AMADEUS_BASE_URL`. Railway injects `PORT` automatically - `server.py`
-   already reads it.
-4. Repeat for `mcp_servers/flight_mcp` (root directory `mcp_servers/flight_mcp`).
-5. Copy each service's public URL (Settings -> Networking -> Generate
-   Domain) - you'll need both for the backend's `HOTEL_MCP_URL` /
-   `FLIGHT_MCP_URL` (root `README.md` "Deployment" section has the full
-   order of operations).
+Do not place `SERPAPI_API_KEY` in frontend variables or any variable beginning
+with `NEXT_PUBLIC_`.
+
+## 9. Adding another MCP server
+
+Keep each provider integration independently deployable:
+
+1. Add a new directory under `mcp_servers/` with its own `server.py`, provider
+   client, requirements, Dockerfile, Railway config, and `.env.example`.
+2. Register only that server's URL in `backend/agents/mcp_client.py`.
+3. Add a matching specialist prompt/node and one graph route.
+4. Mock the provider HTTP boundary in tests; never use live credits in CI.
+
+Do not give every agent a shared tool bag. Continue loading tools through the
+server-specific MCP session so provider capabilities remain isolated.

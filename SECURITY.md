@@ -5,20 +5,20 @@ drawn. Written to be defensible live in the viva (SRS section 11).
 
 ## 1. Threat model
 
-TripWeaver is a chat app that (a) costs money per message (OpenAI + Amadeus
+TripWeaver is a chat app that (a) costs money per message (OpenAI + SerpApi
 usage), (b) executes tool calls based on LLM decisions, and (c) pulls
-third-party data (Amadeus) back into the conversation. The relevant threats:
+third-party Google Travel data through SerpApi back into the conversation. The relevant threats:
 
 | # | Threat | Where it's handled |
 |---|--------|---------------------|
 | 1 | Unauthenticated / anonymous abuse running up API cost | API-key auth on every billable endpoint |
-| 2 | A single client exhausting the shared OpenAI/Amadeus budget | Per-identity sliding-window rate limiting |
+| 2 | A single client exhausting the shared OpenAI/SerpApi budget | Per-identity sliding-window rate limiting |
 | 3 | Oversized / malformed input | Length caps + control-char stripping, before the graph ever sees it |
 | 4 | One traveller reading another's conversation | Server-issued, unguessable (UUID4) session ids; anything else rejected |
 | 5 | A malicious/compromised MCP server returning instructions instead of data (indirect prompt injection / "tool poisoning") | Untrusted-data fencing + explicit guardrail prompt (section 3 below) |
 | 6 | A model looping on tool calls and burning cost | Hard cap: `MAX_TOOL_ROUNDS` per turn |
 | 7 | One dead external service taking the whole app down | Circuit breaker in `agents/mcp_client.py`; every tool call is try/except'd |
-| 8 | Secrets leaking into logs, git, or the frontend | `.env` gitignored everywhere; backend never echoes raw provider error bodies; frontend never touches OpenAI/Amadeus keys, only its own backend's API key |
+| 8 | Secrets leaking into logs, git, or the frontend | `.env` gitignored everywhere; provider errors redact the SerpApi key; frontend never receives OpenAI/SerpApi keys, only its own backend API key |
 | 9 | Open CORS turning the backend into a public API for anyone's website | `ALLOWED_ORIGINS` explicit allowlist, no `*` in production |
 
 ## 2. Auth & rate limiting (`backend/core/security.py`)
@@ -58,8 +58,8 @@ Validated at **three** layers independently, deliberately redundant:
    boundary.
 2. **`core/security.sanitize_user_message`** - strips control characters,
    re-checks length against `MAX_MESSAGE_LENGTH`.
-3. **MCP server inputs** (`mcp_servers/*/amadeus_client.py`) - city/airport
-   codes, dates, and IDs are format-validated *before* any network call,
+3. **MCP server inputs** (`mcp_servers/*/serpapi_client.py`) - queries,
+   airport codes, dates, passenger counts, and filters are validated *before* any network call,
    independent of what called the tool. An MCP server should never trust
    its caller either - a future second agent client, or a compromised
    agent process, is still bound by these checks.
@@ -89,7 +89,7 @@ Validated at **three** layers independently, deliberately redundant:
   server-generated confirmations, never model-authored - even a fully
   "convinced" model can't fabricate a real booking.
 - **No payment/PCI flow** - booking is intentionally simulated (see
-  `amadeus_client.py` docstrings); real payment handling is out of scope.
+  `serpapi_client.py` docstrings); real payment handling is out of scope.
 - **In-memory rate limiting** resets on backend restart and doesn't share
   state across replicas - acceptable for a single-instance deployment,
   flagged here so it's not a surprise at scale.

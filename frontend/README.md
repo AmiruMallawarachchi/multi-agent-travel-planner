@@ -11,7 +11,7 @@ pinned: false
 # TripWeaver frontend
 
 Gradio chat UI for TripWeaver. Talks only to the TripWeaver FastAPI backend
-over `BACKEND_URL` - never calls OpenAI or Amadeus directly, and never
+over `BACKEND_URL` - never calls OpenAI or SerpApi directly, and never
 holds their credentials.
 
 ## Local dev
