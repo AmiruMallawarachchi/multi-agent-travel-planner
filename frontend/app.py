@@ -5,7 +5,7 @@ responses, agent-activity visualisation, user-friendly errors, a travel-
 themed responsive layout).
 
 This talks to the FastAPI backend's /chat/stream SSE endpoint over httpx -
-it never calls OpenAI or Amadeus directly, and it never receives or stores
+it never calls OpenAI or SerpApi directly, and it never receives or stores
 their credentials; BACKEND_API_KEY here authenticates the frontend TO the
 backend, it is not exposed to the browser.
 """
@@ -206,7 +206,7 @@ def build_app() -> gr.Blocks:
         new_trip_btn = gr.Button("New trip", size="sm", variant="secondary")
 
         gr.Markdown(
-            "Hotel & flight search runs on Amadeus's test environment; bookings are simulated "
+            "Hotel & flight search uses SerpApi; bookings are simulated "
             "confirmations, not real reservations.",
             elem_id="tw-footer",
         )

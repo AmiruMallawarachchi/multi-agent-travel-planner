@@ -11,18 +11,24 @@ errors surface to the calling agent as data it can reason about and relay
 honestly to the traveller (SRS section 5: "must never silently swallow a
 failed external call").
 """
+
 from __future__ import annotations
 
 import os
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from serpapi_client import (
+    InvalidInputError,
+    SerpApiError,
+    book_hotel_offer,
+    list_hotels as list_provider_hotels,
+    search_hotel_properties,
+)
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 load_dotenv()
-
-from amadeus_client import AmadeusError, InvalidInputError, book_hotel_offer, list_hotels_by_city, search_hotel_offers
 
 mcp = FastMCP("hotel-mcp")
 
@@ -33,37 +39,62 @@ async def health(_request: Request) -> JSONResponse:
 
 
 @mcp.tool()
-async def list_hotels(city_code: str) -> dict:
-    """List hotels available in a city, before pricing or dates are known.
+async def list_hotels(destination: str) -> dict:
+    """List hotels using a one-night stay beginning tomorrow.
 
     Args:
-        city_code: 3-letter IATA city code, e.g. 'PAR' for Paris, 'CMB' for Colombo.
+        destination: City, area, or complete hotel query, e.g. 'Paris'.
     """
     try:
-        hotels = await list_hotels_by_city(city_code)
+        hotels = await list_provider_hotels(destination)
         return {"ok": True, "hotels": hotels}
     except InvalidInputError as exc:
         return {"ok": False, "error": str(exc)}
-    except AmadeusError as exc:
+    except SerpApiError as exc:
         return {"ok": False, "error": f"Hotel service unavailable: {exc}"}
 
 
 @mcp.tool()
-async def search_hotels(city_code: str, check_in: str, check_out: str, adults: int = 1) -> dict:
+async def search_hotels(
+    destination: str,
+    check_in_date: str,
+    check_out_date: str,
+    adults: int = 2,
+    children: int = 0,
+    currency: str = "USD",
+    min_price: int | None = None,
+    max_price: int | None = None,
+    rating: int | None = None,
+) -> dict:
     """Search priced, available hotel offers.
 
     Args:
-        city_code: 3-letter IATA city code, e.g. 'PAR'.
-        check_in: check-in date, 'YYYY-MM-DD'.
-        check_out: check-out date, 'YYYY-MM-DD'.
-        adults: number of guests (1-9).
+        destination: City, area, or complete hotel query, e.g. 'Dubai Marina'.
+        check_in_date: Check-in date in 'YYYY-MM-DD' format.
+        check_out_date: Check-out date in 'YYYY-MM-DD' format.
+        adults: Number of adult guests (1-10).
+        children: Number of child guests (0-10; maximum 10 total guests).
+        currency: 3-letter currency code, e.g. 'USD'.
+        min_price: Optional minimum nightly price.
+        max_price: Optional maximum nightly price.
+        rating: Optional SerpApi rating filter: 7 (3.5+), 8 (4.0+), or 9 (4.5+).
     """
     try:
-        offers = await search_hotel_offers(city_code, check_in, check_out, adults)
+        offers = await search_hotel_properties(
+            destination=destination,
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
+            adults=adults,
+            children=children,
+            currency=currency,
+            min_price=min_price,
+            max_price=max_price,
+            rating=rating,
+        )
         return {"ok": True, "offers": offers}
     except InvalidInputError as exc:
         return {"ok": False, "error": str(exc)}
-    except AmadeusError as exc:
+    except SerpApiError as exc:
         return {"ok": False, "error": f"Hotel service unavailable: {exc}"}
 
 
@@ -72,7 +103,7 @@ async def book_hotel(offer_id: str, guest_name: str) -> dict:
     """Book a specific hotel offer returned by search_hotels.
 
     Args:
-        offer_id: the offer's id field from a prior search_hotels result.
+        offer_id: property_token from a prior search_hotels result.
         guest_name: full name for the reservation.
     """
     try:

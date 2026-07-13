@@ -4,10 +4,10 @@ Security & guardrail primitives for the FastAPI layer. See SECURITY.md for
 the full write-up (what this defends against and what it deliberately does
 not, e.g. this is single-instance rate limiting, not a WAF).
 
-  1. API-key auth        - the chat endpoint is billable (OpenAI + Amadeus);
+  1. API-key auth        - the chat endpoint is billable (OpenAI + SerpApi);
                             it must not be open to the whole internet.
   2. Rate limiting        - a sliding window per API key / IP, so one client
-                            can't exhaust your OpenAI budget or Amadeus quota.
+                            can't exhaust your OpenAI budget or SerpApi quota.
   3. Input validation     - length caps + control-character stripping on
                             every user message before it reaches the graph.
   4. Session-id hygiene   - unguessable ids issued by us; anything else is

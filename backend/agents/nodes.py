@@ -42,10 +42,10 @@ MAX_HISTORY_MESSAGES = 16
 
 # Hard cap on tool-call <-> tool-result round trips per turn. Without this,
 # a model that keeps deciding to call another tool could loop indefinitely
-# and run up OpenAI / Amadeus usage - this is what stops that.
+# and run up OpenAI / SerpApi usage - this is what stops that.
 MAX_TOOL_ROUNDS = 3
 
-# Amadeus can return dozens of offers; only ever surface a short, decidable
+# SerpApi can return dozens of offers; only ever surface a short, decidable
 # list to the traveller and the model.
 MAX_RESULTS_SHOWN = 5
 
