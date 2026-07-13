@@ -27,12 +27,53 @@ services:
       timeout: 5s
       retries: 5
 
+  itinerary-mcp:
+    build: ./mcp_servers/itinerary_mcp
+    ports: ["8003:8003"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  weather-mcp:
+    build: ./mcp_servers/weather_mcp
+    ports: ["8004:8004"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  currency-mcp:
+    build: ./mcp_servers/currency_mcp
+    ports: ["8005:8005"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  location-mcp:
+    build: ./mcp_servers/location_mcp
+    env_file: ./mcp_servers/location_mcp/.env
+    ports: ["8006:8006"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     env_file: ./backend/.env
     environment:
       HOTEL_MCP_URL: http://hotel-mcp:8001/mcp
       FLIGHT_MCP_URL: http://flight-mcp:8002/mcp
+      ITINERARY_MCP_URL: http://itinerary-mcp:8003/mcp
+      WEATHER_MCP_URL: http://weather-mcp:8004/mcp
+      CURRENCY_MCP_URL: http://currency-mcp:8005/mcp
+      LOCATION_MCP_URL: http://location-mcp:8006/mcp
       ALLOWED_ORIGINS: http://localhost:3000
     ports: ["8000:8000"]
     healthcheck:
@@ -43,6 +84,10 @@ services:
     depends_on:
       hotel-mcp: { condition: service_healthy }
       flight-mcp: { condition: service_healthy }
+      itinerary-mcp: { condition: service_healthy }
+      weather-mcp: { condition: service_healthy }
+      currency-mcp: { condition: service_healthy }
+      location-mcp: { condition: service_healthy }
 
   frontend:
     build: ./frontend

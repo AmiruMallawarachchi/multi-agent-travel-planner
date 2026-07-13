@@ -7,6 +7,10 @@ SERVICE_CONTEXTS = (
     "frontend",
     "mcp_servers/flight_mcp",
     "mcp_servers/hotel_mcp",
+    "mcp_servers/itinerary_mcp",
+    "mcp_servers/weather_mcp",
+    "mcp_servers/currency_mcp",
+    "mcp_servers/location_mcp",
 )
 REQUIRED_PATTERNS = {".env", ".env.*", "!.env.example"}
 
