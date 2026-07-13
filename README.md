@@ -2,13 +2,13 @@
 
 An MCP-based, intent-routed multi-agent travel planner. A traveller chats
 naturally; a LangGraph workflow routes to a General QA, Hotel, or Flight
-agent; each specialist reaches real external data (Amadeus) exclusively
+agent; each specialist reaches real external data (SerpApi) exclusively
 through its own MCP server. Built for the *MCP-Based Multi-Agent Travel
 Planner* Extension Sprint spec.
 
 - **Architecture & every locked design decision:** [`SYSTEM.md`](./SYSTEM.md)
 - **Security model & threat table:** [`SECURITY.md`](./SECURITY.md)
-- **MCP server setup (Amadeus keys, local run, deploy):** [`MCP_SETUP.md`](./MCP_SETUP.md)
+- **MCP server setup (SerpApi key, local run, deploy):** [`MCP_SETUP.md`](./MCP_SETUP.md)
 
 ## Architecture
 
@@ -23,20 +23,20 @@ flowchart TD
     G -->|"clarify"| CL["Clarify"]
     HA <-->|"MCP, scoped"| HM["hotel-mcp server"]
     FA <-->|"MCP, scoped"| FM["flight-mcp server"]
-    HM <--> AM1["Amadeus test API"]
-    FM <--> AM2["Amadeus test API"]
+    HM <--> SP1["SerpApi Google Hotels"]
+    FM <--> SP2["SerpApi Google Flights"]
 ```
 
 Three independently deployable processes: **frontend** (Gradio), **backend**
 (FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
-never call Amadeus directly - only through their own server's MCP tools -
+never call SerpApi directly - only through their own server's MCP tools -
 so adding or swapping a travel data provider never touches agent code.
 
 ## Features
 
 **Core (spec-required)**
 - Intent-routed LangGraph workflow (not a fixed linear path)
-- Real external data via MCP: hotel + flight search on Amadeus's test API
+- Real external data via MCP: Google Hotels + Google Flights search through SerpApi
 - Streaming responses, token-by-token, over SSE
 - Agent-activity visualisation (ROUTING / SEARCHING / BOOKING / RESPONDING
   / CLARIFYING - a "departure board" ticker in the UI)
@@ -56,9 +56,10 @@ so adding or swapping a travel data provider never touches agent code.
   session ("make it cheaper" works without repeating the city and dates)
 - **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
   friendly error messages instead of stack traces
-- **Tests**: 26 unit tests covering routing, graceful degradation, and the
-  tool-loop cap, running against mocked LLM/tool calls (no API keys needed
-  in CI)
+- **Tests**: 70 offline tests (37 backend + 32 provider contracts + 1
+  repository-hygiene test) covering routing, graceful degradation, tool-loop
+  caps, SerpApi request mapping, normalization, validation, secret redaction,
+  and Docker secret exclusions (no API keys needed in CI)
 
 ## Repository layout
 
@@ -89,7 +90,7 @@ SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```bash
 git clone <your-repo-url> tripweaver && cd tripweaver
 
-# 1. MCP servers (see MCP_SETUP.md for getting free Amadeus test keys)
+# 1. MCP servers (see MCP_SETUP.md for configuring a private SerpApi key)
 cd mcp_servers/hotel_mcp  && cp .env.example .env && pip install -r requirements.txt && python server.py &
 cd ../flight_mcp           && cp .env.example .env && pip install -r requirements.txt && python server.py &
 
@@ -114,7 +115,7 @@ Deploy in this order - each step needs the previous step's URL:
 
 1. **`mcp_servers/hotel_mcp`** and **`mcp_servers/flight_mcp`** to Railway
    (one service each, root directory set per service). Full steps in
-   `MCP_SETUP.md` section 7.
+   `MCP_SETUP.md` section 8.
 2. **`backend`** to Railway, root directory `backend`. Set
    `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` to the two URLs from step 1,
    `OPENAI_API_KEY`, `TRIPWEAVER_API_KEYS` (generate a long random string),
@@ -127,18 +128,16 @@ Deploy in this order - each step needs the previous step's URL:
 
 ## Testing
 
-```bash
-cd backend
-pip install -r requirements-dev.txt
-pytest -v
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-26 tests, all offline (LLM and MCP tool calls are mocked) - they check
-routing correctness, that a dead MCP server degrades a turn gracefully
-instead of crashing it, and that the tool-call loop cap actually stops
-runaway tool calling. Every file in this repo has also been `py_compile`'d
-and import-checked against the exact dependency versions pinned in each
-`requirements.txt`.
+70 tests pass offline: 37 backend tests mock LLM/MCP behavior, 32 provider
+tests use `httpx.MockTransport` so they consume no SerpApi credits, and one
+repository test verifies every Docker build context excludes local `.env`
+files. They cover routing, graceful degradation, tool-loop caps, provider
+request mapping, normalization, validation, and credential-safe failures.
+Every Python file is also compile-checked against the installed dependencies.
 
 ## Viva quick-reference
 
@@ -146,7 +145,7 @@ See `SYSTEM.md` for the full design rationale. Fast pointers into the code
 for the questions SRS section 11 says to expect:
 
 - **MCP layer / decoupling** -> `agents/mcp_client.py` (`get_tools_for`),
-  `MCP_SETUP.md` section 6 (adding a server touches zero agent code)
+  `MCP_SETUP.md` section 9
 - **Intent routing / state** -> `agents/graph.py`, `agents/entity.py`
 - **Missing-input handling** -> `agents/prompts.py` (agent rules 1),
   `clarify_node` in `agents/nodes.py`

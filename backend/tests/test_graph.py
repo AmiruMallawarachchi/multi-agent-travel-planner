@@ -82,7 +82,7 @@ class TestGracefulDegradation:
     @pytest.mark.asyncio
     async def test_hotel_node_records_failed_tool_call_without_crashing(self):
         """A tool that IS available but throws mid-call (network blip,
-        Amadeus 500, etc.) must be caught and recorded as FAILED, not
+        provider 500, etc.) must be caught and recorded as FAILED, not
         propagate an exception up through the graph."""
         state = new_state("s1", "find me a hotel in Paris, Sep 10-14")
 
@@ -225,7 +225,7 @@ class TestToolLoopCap:
     async def test_stops_after_max_tool_rounds_instead_of_looping_forever(self):
         """A model that keeps calling tools every round must be cut off at
         MAX_TOOL_ROUNDS and forced to produce a final answer - this is the
-        guardrail against runaway API/Amadeus usage."""
+        guardrail against runaway API/provider usage."""
         from agents import nodes as nodes_module
 
         looping_tool = SimpleNamespace(name="search_hotels", ainvoke=AsyncMock(return_value="offer A"))
