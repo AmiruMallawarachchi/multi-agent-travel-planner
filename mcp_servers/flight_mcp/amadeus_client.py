@@ -18,7 +18,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 
@@ -50,9 +50,22 @@ def _validate_airport_code(label: str, code: str) -> str:
     return code.upper()
 
 
-def _validate_date(label: str, value: str) -> str:
+def _validate_date(label: str, value: str) -> date:
     if not _DATE_RE.match(value or ""):
         raise InvalidInputError(f"{label} must be in YYYY-MM-DD format")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise InvalidInputError(f"{label} must be a valid calendar date") from exc
+
+
+def _validate_adults(adults: int) -> int:
+    try:
+        value = int(adults)
+    except (TypeError, ValueError) as exc:
+        raise InvalidInputError("adults must be an integer from 1 to 9") from exc
+    if not 1 <= value <= 9:
+        raise InvalidInputError("adults must be between 1 and 9")
     return value
 
 
@@ -109,8 +122,8 @@ async def search_flight_offers(
     """Real Amadeus call: priced, available flight offers for a route/date."""
     origin = _validate_airport_code("origin", origin)
     destination = _validate_airport_code("destination", destination)
-    departure_date = _validate_date("departure_date", departure_date)
-    adults = max(1, min(int(adults), 9))
+    departure = _validate_date("departure_date", departure_date)
+    adults = _validate_adults(adults)
     limit = max(1, min(int(limit), 20))
 
     data = await _get(
@@ -118,7 +131,7 @@ async def search_flight_offers(
         {
             "originLocationCode": origin,
             "destinationLocationCode": destination,
-            "departureDate": departure_date,
+            "departureDate": departure.isoformat(),
             "adults": adults,
             "max": limit,
             "currencyCode": "USD",

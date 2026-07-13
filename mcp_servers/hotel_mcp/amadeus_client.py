@@ -18,7 +18,7 @@ import os
 import re
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 
@@ -51,9 +51,22 @@ def _validate_city_code(city_code: str) -> str:
     return city_code.upper()
 
 
-def _validate_date(label: str, value: str) -> str:
+def _validate_date(label: str, value: str) -> date:
     if not _DATE_RE.match(value or ""):
         raise InvalidInputError(f"{label} must be in YYYY-MM-DD format")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise InvalidInputError(f"{label} must be a valid calendar date") from exc
+
+
+def _validate_adults(adults: int) -> int:
+    try:
+        value = int(adults)
+    except (TypeError, ValueError) as exc:
+        raise InvalidInputError("adults must be an integer from 1 to 9") from exc
+    if not 1 <= value <= 9:
+        raise InvalidInputError("adults must be between 1 and 9")
     return value
 
 
@@ -110,9 +123,11 @@ async def search_hotel_offers(
     Note: queries the first 20 hotel ids found in the city per call - a
     production system would paginate; acceptable for this project's scope."""
     city_code = _validate_city_code(city_code)
-    check_in = _validate_date("check_in", check_in)
-    check_out = _validate_date("check_out", check_out)
-    adults = max(1, min(int(adults), 9))
+    check_in_date = _validate_date("check_in", check_in)
+    check_out_date = _validate_date("check_out", check_out)
+    if check_out_date <= check_in_date:
+        raise InvalidInputError("check_out must be after check_in")
+    adults = _validate_adults(adults)
 
     hotels = await list_hotels_by_city(city_code, limit=20)
     hotel_ids = ",".join(h["hotelId"] for h in hotels if "hotelId" in h)
@@ -123,8 +138,8 @@ async def search_hotel_offers(
         "/v3/shopping/hotel-offers",
         {
             "hotelIds": hotel_ids,
-            "checkInDate": check_in,
-            "checkOutDate": check_out,
+            "checkInDate": check_in_date.isoformat(),
+            "checkOutDate": check_out_date.isoformat(),
             "adults": adults,
         },
     )
