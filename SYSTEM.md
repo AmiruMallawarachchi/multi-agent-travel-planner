@@ -274,7 +274,7 @@ buildable from its own Dockerfile.
 
 ## 11. Testing strategy
 
-`backend/tests/` — 54 tests, all offline:
+`backend/tests/` — 55 tests, all offline:
 - `test_agent_helpers.py` — conversation-history windowing, tool-result JSON
   handling, untrusted-data fencing, and simulated booking-confirmation extraction.
 - `test_api.py` — endpoint auth/rate-limit/session behavior and the streaming
@@ -305,7 +305,7 @@ or Amadeus credentials are needed to run the backend suite or in CI.
 - `pip install` of backend and MCP requirements plus `npm install` for the
   Next.js frontend — no dependency conflicts, versions in §2.
 - `py_compile` of every `.py` file in the repo.
-- `pytest` — 54/54 passing against the real installed `langgraph`/
+- `pytest` — 55/55 passing against the real installed `langgraph`/
   `langchain-*` versions above (not just mocked at the import level —
   the actual graph, node, and security code executes).
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
