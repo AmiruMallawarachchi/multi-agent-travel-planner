@@ -23,7 +23,6 @@ from typing import Literal, cast
 
 import httpx
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_mcp_adapters.tools import load_mcp_tools
 
 ServerName = Literal[
     "hotel-mcp",
@@ -105,8 +104,10 @@ async def get_tools_for(server: ServerName) -> list:
     if breaker_open(server):
         return []
     try:
-        async with _client.session(server) as session:
-            tools = await load_mcp_tools(session)
+        # Connection-backed tools open a fresh MCP session when invoked. Returning
+        # tools loaded from a temporary ClientSession would leave them bound to a
+        # closed stream as soon as this function returned.
+        tools = await _client.get_tools(server_name=server)
         _breakers[server].record_success()
         return tools
     except Exception:  # noqa: BLE001 - discovery failures degrade one capability
