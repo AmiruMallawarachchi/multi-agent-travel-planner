@@ -14,7 +14,7 @@ Planner* Extension Sprint spec.
 
 ```mermaid
 flowchart TD
-    U["Traveller"] -->|"chat"| FE["Gradio frontend"]
+    U["Traveller"] -->|"chat"| FE["Next.js chat frontend"]
     FE <-->|"SSE /chat/stream"| BE["FastAPI backend"]
     BE --> G["LangGraph: classify_intent"]
     G -->|"hotel"| HA["Hotel Agent"]
@@ -27,7 +27,7 @@ flowchart TD
     FM <--> AM2["Amadeus test API"]
 ```
 
-Three independently deployable processes: **frontend** (Gradio), **backend**
+Three independently deployable processes: **frontend** (Next.js), **backend**
 (FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
 never call Amadeus directly - only through their own server's MCP tools -
 so adding or swapping a travel data provider never touches agent code.
@@ -39,10 +39,10 @@ so adding or swapping a travel data provider never touches agent code.
 - Real external data via MCP: hotel + flight search on Amadeus's test API
 - Streaming responses, token-by-token, over SSE
 - Agent-activity visualisation (ROUTING / SEARCHING / BOOKING / RESPONDING
-  / CLARIFYING - a "departure board" ticker in the UI)
+  / CLARIFYING - shown as a small live state in the chat header)
 - Graceful degradation: a dead MCP server never crashes the app
 - Follow-up questions for missing input, never guessed values
-- Travel-themed, responsive Gradio UI
+- Minimal shadcn/prompt-kit inspired chat UI with markdown and code blocks
 
 **Added on top**
 - **Security**: API-key auth, per-identity rate limiting, three-layer input
@@ -54,7 +54,7 @@ so adding or swapping a travel data provider never touches agent code.
   history trimming, result-count caps - all to keep cost and latency bounded
 - **Memory**: LangGraph `MemorySaver` gives free cross-turn context per
   session ("make it cheaper" works without repeating the city and dates)
-- **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
+- **UX**: quick prompts, copyable messages, a "New chat" reset, retry-
   friendly error messages instead of stack traces
 - **Tests**: 26 unit tests covering routing, graceful degradation, and the
   tool-loop cap, running against mocked LLM/tool calls (no API keys needed
@@ -78,8 +78,9 @@ mcp_servers/
   hotel_mcp/                 list_hotels / search_hotels / book_hotel
   flight_mcp/                 list_flights / search_flights / book_flight
 frontend/
-  app.py                     Gradio Blocks UI, SSE client
-  theme.py                   Colors, fonts, activity-ticker CSS
+  app/                       Next.js app routes and API proxy
+  components/                Simple chat shell + prompt-kit style code blocks
+  lib/                       SSE parser and frontend tests
 docker-compose.yml            Run all four services together, locally
 SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```
@@ -102,11 +103,11 @@ uvicorn main:app --reload
 # 3. Frontend
 cd ../frontend
 cp .env.example .env   # BACKEND_API_KEY must match one value in TRIPWEAVER_API_KEYS
-pip install -r requirements.txt
-python app.py
+npm install
+npm run dev
 ```
 
-Open http://localhost:7860. Or simply: `docker compose up --build`.
+Open http://localhost:3000. Or simply: `docker compose up --build`.
 
 ## Deploying
 
@@ -119,11 +120,11 @@ Deploy in this order - each step needs the previous step's URL:
    `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` to the two URLs from step 1,
    `OPENAI_API_KEY`, `TRIPWEAVER_API_KEYS` (generate a long random string),
    and `ALLOWED_ORIGINS` (you'll fill this in after step 3, then redeploy).
-3. **`frontend`** to Hugging Face Spaces, root = `frontend/`. Set
+3. **`frontend`** to Railway or any Docker-capable host, root = `frontend/`. Set
    `BACKEND_URL` to the backend's Railway URL and `BACKEND_API_KEY` to one
    of the values in `TRIPWEAVER_API_KEYS`.
 4. Go back to the backend's Railway variables and set `ALLOWED_ORIGINS` to
-   your Space's URL, then redeploy the backend so CORS actually allows it.
+   your frontend URL, then redeploy the backend so CORS actually allows it.
 
 ## Testing
 
@@ -131,14 +132,19 @@ Deploy in this order - each step needs the previous step's URL:
 cd backend
 pip install -r requirements-dev.txt
 pytest -v
+
+cd ../frontend
+npm install
+npm test
+npm run typecheck
+npm run build
 ```
 
-26 tests, all offline (LLM and MCP tool calls are mocked) - they check
+Backend tests are offline (LLM and MCP tool calls are mocked) - they check
 routing correctness, that a dead MCP server degrades a turn gracefully
 instead of crashing it, and that the tool-call loop cap actually stops
-runaway tool calling. Every file in this repo has also been `py_compile`'d
-and import-checked against the exact dependency versions pinned in each
-`requirements.txt`.
+runaway tool calling. Frontend checks cover the SSE parser, TypeScript, and
+the optimized Next.js build.
 
 ## Viva quick-reference
 
@@ -153,5 +159,5 @@ for the questions SRS section 11 says to expect:
 - **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
   `_run_specialist`'s try/except in `agents/nodes.py`
 - **Streaming / activity cues** -> `main.py`'s `astream_events` bridge,
-  `frontend/app.py`'s SSE consumer
+  `frontend/components/simple-chat.tsx`'s SSE consumer
 - **Security** -> `SECURITY.md`
