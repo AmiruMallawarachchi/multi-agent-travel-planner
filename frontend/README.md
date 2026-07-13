@@ -1,37 +1,51 @@
----
-title: TripWeaver
-emoji: ✈️
-colorFrom: purple
-colorTo: orange
-sdk: gradio
-app_file: app.py
-pinned: false
----
-
 # TripWeaver frontend
 
-Gradio chat UI for TripWeaver. Talks only to the TripWeaver FastAPI backend
-over `BACKEND_URL` - never calls OpenAI or SerpApi directly, and never
-holds their credentials.
+Responsive Next.js travel workspace built with shadcn/ui, Radix primitives,
+Tailwind CSS, and Lucide icons. The interface has three coordinated areas:
+conversation history, the streaming chat, and live tools/trip context.
+
+Implemented interactions include:
+
+- locally persisted conversation history, search, new chat, and clear history
+- export, copy, and Web Share support
+- text-file attachments and browser speech recognition when available
+- live agent/MCP status driven by backend SSE events
+- trip-context extraction for destination, dates, travellers, budget, and preferences
+- working flight/hotel quick actions, with future MCP actions clearly unavailable
+- settings for persistence, tool activity, and light/dark appearance
+- responsive history and status sheets on smaller screens
+
+The browser never receives OpenAI, SerpApi, or backend API credentials.
+`BACKEND_API_KEY` is read only by the Next.js server route at `/api/chat`.
+`/api/health` performs a real backend health check so the UI does not show a
+fabricated online state.
 
 ## Local dev
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env   # fill in BACKEND_URL / BACKEND_API_KEY
-python app.py
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-Open http://localhost:7860
+Open http://localhost:3000.
 
-## Deploying to Hugging Face Spaces
+## Checks
 
-1. Create a new Space -> SDK: Gradio -> hardware: CPU basic is enough.
-2. Push this `frontend/` folder's contents to the Space's git repo root
-   (Spaces expects `app.py` and `requirements.txt` at the root of the repo).
-3. In the Space's **Settings -> Variables and secrets**, add:
-   - `BACKEND_URL` - your deployed Railway backend URL
-   - `BACKEND_API_KEY` - one of the keys you set in the backend's
-     `TRIPWEAVER_API_KEYS`
-4. The Space rebuilds automatically. See the root `README.md` for the full
-   deployment order (MCP servers -> backend -> frontend).
+```bash
+npm test
+npm run lint
+npm run typecheck
+npm run build
+npm audit
+```
+
+Vitest covers the API proxy, health reporting, conversation helpers, trip
+context extraction, SSE-to-tool-state handling, and user-facing workspace
+interactions.
+
+## Environment
+
+- `BACKEND_URL` - FastAPI backend URL.
+- `BACKEND_API_KEY` - one accepted value from backend `TRIPWEAVER_API_KEYS`.
+- `PORT` - production server port, defaults to `3000`.

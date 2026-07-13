@@ -69,8 +69,8 @@ class TestGracefulDegradation:
         state = new_state("s1", "find me a hotel in Paris")
         fake_reply = _fake_llm("I can't reach live hotel data right now - please try again shortly.")
 
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[])), patch(
-            "agents.nodes.get_agent_llm", return_value=fake_reply
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=fake_reply
         ):
             result = await hotel_node(state)
 
@@ -97,8 +97,8 @@ class TestGracefulDegradation:
         llm.ainvoke = AsyncMock(side_effect=[first_call, second_call])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[failing_tool])), patch(
-            "agents.nodes.get_agent_llm", return_value=llm
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[failing_tool])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=llm
         ):
             result = await hotel_node(state)
 
@@ -137,8 +137,8 @@ class TestBookingConfirmation:
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.nodes.get_agent_llm", return_value=llm
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=llm
         ):
             result = await hotel_node(state)
 
@@ -181,8 +181,8 @@ class TestBookingConfirmation:
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.nodes.get_agent_llm", return_value=llm
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=llm
         ):
             result = await flight_node(state)
 
@@ -211,8 +211,8 @@ class TestBookingConfirmation:
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.nodes.get_agent_llm", return_value=llm
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=llm
         ):
             result = await hotel_node(state)
 
@@ -242,8 +242,8 @@ class TestToolLoopCap:
         llm.bind_tools = lambda _tools: llm
 
         state = new_state("s1", "keep searching")
-        with patch("agents.nodes.get_tools_for", new=AsyncMock(return_value=[looping_tool])), patch(
-            "agents.nodes.get_agent_llm", return_value=llm
+        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[looping_tool])), patch(
+            "agents.specialist_runner.get_agent_llm", return_value=llm
         ):
             result = await hotel_node(state)
 

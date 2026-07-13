@@ -14,7 +14,7 @@ Planner* Extension Sprint spec.
 
 ```mermaid
 flowchart TD
-    U["Traveller"] -->|"chat"| FE["Gradio frontend"]
+    U["Traveller"] -->|"chat"| FE["Next.js chat frontend"]
     FE <-->|"SSE /chat/stream"| BE["FastAPI backend"]
     BE --> G["LangGraph: classify_intent"]
     G -->|"hotel"| HA["Hotel Agent"]
@@ -27,8 +27,8 @@ flowchart TD
     FM <--> SP2["SerpApi Google Flights"]
 ```
 
-Three independently deployable processes: **frontend** (Gradio), **backend**
-(FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
+Four independently deployable services: **frontend** (Next.js), **backend**
+(FastAPI + LangGraph), **hotel MCP**, and **flight MCP**. Agents
 never call SerpApi directly - only through their own server's MCP tools -
 so adding or swapping a travel data provider never touches agent code.
 
@@ -39,10 +39,11 @@ so adding or swapping a travel data provider never touches agent code.
 - Real external data via MCP: Google Hotels + Google Flights search through SerpApi
 - Streaming responses, token-by-token, over SSE
 - Agent-activity visualisation (ROUTING / SEARCHING / BOOKING / RESPONDING
-  / CLARIFYING - a "departure board" ticker in the UI)
+  / CLARIFYING - shown as a small live state in the chat header)
 - Graceful degradation: a dead MCP server never crashes the app
 - Follow-up questions for missing input, never guessed values
-- Travel-themed, responsive Gradio UI
+- Responsive shadcn/ui travel workspace with chat history, live tool status,
+  trip context, markdown, and code blocks
 
 **Added on top**
 - **Security**: API-key auth, per-identity rate limiting, three-layer input
@@ -54,24 +55,30 @@ so adding or swapping a travel data provider never touches agent code.
   history trimming, result-count caps - all to keep cost and latency bounded
 - **Memory**: LangGraph `MemorySaver` gives free cross-turn context per
   session ("make it cheaper" works without repeating the city and dates)
-- **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
+- **UX**: searchable local chat history, export/share, attachments, supported
+  voice input, quick actions, settings, trip-context extraction, and retry-
   friendly error messages instead of stack traces
-- **Tests**: 70 offline tests (37 backend + 32 provider contracts + 1
-  repository-hygiene test) covering routing, graceful degradation, tool-loop
-  caps, SerpApi request mapping, normalization, validation, secret redaction,
-  and Docker secret exclusions (no API keys needed in CI)
+- **Tests**: offline backend, provider-contract, repository-hygiene, and
+  frontend suites covering routing, graceful degradation, SSE normalization,
+  tool-result handling, provider mapping, secret redaction, and the tool-loop
+  cap (no API keys needed in CI)
 
 ## Repository layout
 
 ```
 backend/
-  main.py                 FastAPI app: /health, /session, /chat/stream (SSE)
+  main.py                 ASGI entrypoint
+  api/                    FastAPI app factory, routes, schemas, SSE events
+  config.py               Typed backend settings
   agents/
     entity.py              Shared LangGraph state schema
     llm.py                 LLM factory (OpenAI)
     prompts.py              System prompts + shared guardrails block
     mcp_client.py            Resilient, per-server-scoped MCP tool loading
-    nodes.py                classify_intent / hotel / flight / general_qa / clarify
+    history.py              Conversation-window helper
+    tool_results.py          Untrusted tool-data fencing + booking extraction
+    specialist_runner.py     Shared tool-call loop for hotel/flight agents
+    nodes.py                Thin LangGraph node adapters
     graph.py                 StateGraph wiring + MemorySaver checkpointer
   core/security.py          Auth, rate limiting, input & session-id validation
   tests/                    pytest suite (mocked LLM/tools, no network needed)
@@ -79,8 +86,11 @@ mcp_servers/
   hotel_mcp/                 list_hotels / search_hotels / book_hotel
   flight_mcp/                 list_flights / search_flights / book_flight
 frontend/
-  app.py                     Gradio Blocks UI, SSE client
-  theme.py                   Colors, fonts, activity-ticker CSS
+  app/                       Next.js routes, backend proxy, and health bridge
+  components/ui/             shadcn/ui component source
+  components/tripweaver/     Workspace, chat, history, settings, and status UI
+  features/tripweaver/       Conversation, trip-context, and stream-state logic
+  lib/                       SSE parser and shared helpers
 docker-compose.yml            Run all four services together, locally
 SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```
@@ -103,11 +113,11 @@ uvicorn main:app --reload
 # 3. Frontend
 cd ../frontend
 cp .env.example .env   # BACKEND_API_KEY must match one value in TRIPWEAVER_API_KEYS
-pip install -r requirements.txt
-python app.py
+npm install
+npm run dev
 ```
 
-Open http://localhost:7860. Or simply: `docker compose up --build`.
+Open http://localhost:3000. Or simply: `docker compose up --build`.
 
 ## Deploying
 
@@ -120,11 +130,11 @@ Deploy in this order - each step needs the previous step's URL:
    `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` to the two URLs from step 1,
    `OPENAI_API_KEY`, `TRIPWEAVER_API_KEYS` (generate a long random string),
    and `ALLOWED_ORIGINS` (you'll fill this in after step 3, then redeploy).
-3. **`frontend`** to Hugging Face Spaces, root = `frontend/`. Set
+3. **`frontend`** to Railway or any Docker-capable host, root = `frontend/`. Set
    `BACKEND_URL` to the backend's Railway URL and `BACKEND_API_KEY` to one
    of the values in `TRIPWEAVER_API_KEYS`.
 4. Go back to the backend's Railway variables and set `ALLOWED_ORIGINS` to
-   your Space's URL, then redeploy the backend so CORS actually allows it.
+   your frontend URL, then redeploy the backend so CORS actually allows it.
 
 ## Testing
 
@@ -132,12 +142,22 @@ Deploy in this order - each step needs the previous step's URL:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-70 tests pass offline: 37 backend tests mock LLM/MCP behavior, 32 provider
-tests use `httpx.MockTransport` so they consume no SerpApi credits, and one
-repository test verifies every Docker build context excludes local `.env`
-files. They cover routing, graceful degradation, tool-loop caps, provider
-request mapping, normalization, validation, and credential-safe failures.
-Every Python file is also compile-checked against the installed dependencies.
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m pytest -q
+
+cd ../frontend
+npm install
+npm test
+npm run typecheck
+npm run build
+```
+
+The Python suites are offline: LLM, MCP, and provider HTTP calls are mocked, so
+they consume no OpenAI or SerpApi credits. Frontend tests cover the API bridge,
+SSE parser, conversation persistence/search/export, trip-context extraction,
+tool-state mapping, and workspace interactions, followed by TypeScript and the
+optimized Next.js build.
 
 ## Viva quick-reference
 
@@ -150,7 +170,8 @@ for the questions SRS section 11 says to expect:
 - **Missing-input handling** -> `agents/prompts.py` (agent rules 1),
   `clarify_node` in `agents/nodes.py`
 - **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
-  `_run_specialist`'s try/except in `agents/nodes.py`
-- **Streaming / activity cues** -> `main.py`'s `astream_events` bridge,
-  `frontend/app.py`'s SSE consumer
+  `run_specialist`'s try/except in `agents/specialist_runner.py`
+- **Streaming / activity cues** -> `api/routes.py` + `api/sse.py`,
+  `frontend/components/tripweaver/tripweaver-app.tsx` and
+  `frontend/features/tripweaver/stream-state.ts`
 - **Security** -> `SECURITY.md`

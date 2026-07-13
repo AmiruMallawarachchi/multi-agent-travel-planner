@@ -1,13 +1,24 @@
-FROM python:3.12-slim
+FROM node:24-alpine AS deps
 
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+FROM node:24-alpine AS builder
 
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN npm run build
 
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-EXPOSE 7860
+FROM node:24-alpine AS runner
 
-CMD ["sh", "-c", "python app.py"]
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+CMD ["node", "server.js"]

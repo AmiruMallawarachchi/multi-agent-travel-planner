@@ -1,6 +1,9 @@
-"""Ensures `agents` and `core` are importable regardless of where pytest is
-invoked from, without needing the package installed or PYTHONPATH set."""
+"""Ensures local packages are importable without installing the repo."""
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
+BACKEND_ROOT = pathlib.Path(__file__).parent
+REPO_ROOT = BACKEND_ROOT.parent
+
+for path in (BACKEND_ROOT, REPO_ROOT):
+    sys.path.insert(0, str(path))
