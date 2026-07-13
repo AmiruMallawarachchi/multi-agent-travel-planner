@@ -267,6 +267,9 @@ services is independently buildable from its own `Dockerfile` +
 mapping, normalized results, input validation, result caps, missing arrays,
 provider errors, and API-key redaction without consuming provider credits.
 
+`tests/test_docker_secret_hygiene.py` — verifies every service-level Docker
+build context excludes local `.env` files while retaining `.env.example`.
+
 LLM and MCP tool calls are mocked (`unittest.mock`) — no `OPENAI_API_KEY`
 or SerpApi credentials are needed to run the suites or in CI.
 
@@ -282,6 +285,8 @@ or SerpApi credentials are needed to run the suites or in CI.
   the actual graph, node, and security code executes).
 - SerpApi contract tests — 32/32 passing with `httpx.MockTransport`; no live
   request or provider credit is used.
+- Docker secret-hygiene test — confirmed all four service build contexts
+  exclude local `.env` files from container images.
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
   — confirmed `['list_hotels', 'search_hotels', 'book_hotel']` and
   `['list_flights', 'search_flights', 'book_flight']`.
@@ -303,9 +308,17 @@ or SerpApi credentials are needed to run the suites or in CI.
   `Blocks` layout, theme, CSS, and event-chaining (`.click().then(...)`)
   construct without error.
 
-What was **not** verified in this change: a real OpenAI completion or a live
-SerpApi response. No real SerpApi key was read and no provider credit was used;
-the unverified portion is the third-party HTTP round trip with a live account.
+Live SerpApi verification completed on 2026-07-13 through the MCP transport:
+- A round-trip Google Flights search from CMB to DXB for 2026-08-01 through
+  2026-08-07 returned nine normalized flight options.
+- A Google Hotels search for Dubai for the same dates returned ten normalized
+  properties.
+- Credentials remained in ignored local `.env` files; verification output did
+  not print API keys, booking tokens, or property tokens.
+
+What was **not** verified in this change: a real OpenAI completion. Real travel
+booking and payment are intentionally out of scope; booking confirmations are
+simulated and explicitly labelled as such.
 
 ---
 

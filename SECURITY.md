@@ -18,7 +18,7 @@ third-party Google Travel data through SerpApi back into the conversation. The r
 | 5 | A malicious/compromised MCP server returning instructions instead of data (indirect prompt injection / "tool poisoning") | Untrusted-data fencing + explicit guardrail prompt (section 3 below) |
 | 6 | A model looping on tool calls and burning cost | Hard cap: `MAX_TOOL_ROUNDS` per turn |
 | 7 | One dead external service taking the whole app down | Circuit breaker in `agents/mcp_client.py`; every tool call is try/except'd |
-| 8 | Secrets leaking into logs, git, or the frontend | `.env` gitignored everywhere; provider errors redact the SerpApi key; frontend never receives OpenAI/SerpApi keys, only its own backend API key |
+| 8 | Secrets leaking into logs, Git, container images, or the frontend | `.env` files are Git-ignored and excluded from every Docker build context; provider errors redact the SerpApi key; frontend never receives OpenAI/SerpApi keys, only its own backend API key |
 | 9 | Open CORS turning the backend into a public API for anyone's website | `ALLOWED_ORIGINS` explicit allowlist, no `*` in production |
 
 ## 2. Auth & rate limiting (`backend/core/security.py`)

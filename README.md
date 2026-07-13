@@ -56,9 +56,10 @@ so adding or swapping a travel data provider never touches agent code.
   session ("make it cheaper" works without repeating the city and dates)
 - **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
   friendly error messages instead of stack traces
-- **Tests**: 69 offline tests (37 backend + 32 provider contracts) covering
-  routing, graceful degradation, tool-loop caps, SerpApi request mapping,
-  normalization, validation, and secret redaction (no API keys needed in CI)
+- **Tests**: 70 offline tests (37 backend + 32 provider contracts + 1
+  repository-hygiene test) covering routing, graceful degradation, tool-loop
+  caps, SerpApi request mapping, normalization, validation, secret redaction,
+  and Docker secret exclusions (no API keys needed in CI)
 
 ## Repository layout
 
@@ -131,11 +132,12 @@ Deploy in this order - each step needs the previous step's URL:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-69 tests pass offline: 37 backend tests mock LLM/MCP behavior, and 32 provider
-tests use `httpx.MockTransport` so they consume no SerpApi credits. They cover
-routing, graceful degradation, tool-loop caps, provider request mapping,
-normalization, validation, and credential-safe failures. Every Python file is
-also compile-checked against the installed dependency versions.
+70 tests pass offline: 37 backend tests mock LLM/MCP behavior, 32 provider
+tests use `httpx.MockTransport` so they consume no SerpApi credits, and one
+repository test verifies every Docker build context excludes local `.env`
+files. They cover routing, graceful degradation, tool-loop caps, provider
+request mapping, normalization, validation, and credential-safe failures.
+Every Python file is also compile-checked against the installed dependencies.
 
 ## Viva quick-reference
 
