@@ -32,7 +32,7 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | # | Decision | Rationale | Alternatives considered |
 |---|---|---|---|
 | D1 | LLM provider: **OpenAI** (`gpt-4o-mini` for both router and agents, env-overridable) | User choice; `agents/llm.py` is the single seam if this ever changes | Groq, Anthropic — both would be a one-file swap |
-| D2 | **Supervisor/router pattern**, not `create_react_agent` | Manual tool-call loop in `_run_specialist` (agents/nodes.py) is fully visible/explainable code — defensible line-by-line in a viva, vs. a black-box prebuilt agent | LangGraph prebuilt ReAct agent — faster to write, harder to defend live |
+| D2 | **Supervisor/router pattern**, not `create_react_agent` | Manual tool-call loop in `agents/specialist_runner.py` is fully visible/explainable code — defensible line-by-line in a viva, vs. a black-box prebuilt agent | LangGraph prebuilt ReAct agent — faster to write, harder to defend live |
 | D3 | Tools scoped **per agent, per MCP server** via `client.session(name)` + `load_mcp_tools`, not a shared tool bag | `MultiServerMCPClient.get_tools()` aggregates all servers with no per-server filter (confirmed against the installed `langchain-mcp-adapters==0.3.0`) — session-scoping is the documented way to get an agent-specific tool list, and it's what makes "Hotel agent can't call a flight tool" true by construction, not by prompt instruction | Bind all tools to every agent + rely on the prompt to self-restrict — rejected, not actually decoupled |
 | D4 | Standalone **`fastmcp`** package (v3.x) for both MCP servers, not the bundled `mcp[cli]` SDK | Confirmed working `host`/`port` kwargs on `mcp.run(transport="http", ...)`, which Railway's dynamic `$PORT` needs; actively the more current recommended path as of this build | Bundled `mcp.server.fastmcp.FastMCP` — also viable, more ceremony for host/port binding |
 | D5 | Transport string **`"http"`** (streamable HTTP) on both client and server config | Matches the current `fastmcp`/`langchain-mcp-adapters` documented examples; consistent terminology end-to-end avoids a "http" vs "streamable-http" mismatch bug | `"streamable-http"` alias — also valid, chose the shorter current-recommended form |
@@ -40,7 +40,7 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D7 | **Circuit breaker** per MCP server (3 failures → 60s cooldown) in `agents/mcp_client.py` | SRS §5 resilience requirement — stops every turn paying a timeout against a server that's already known-down | Naive retry-per-call — rejected, doesn't bound latency |
 | D8 | **`MemorySaver`** checkpointer, keyed by `session_id` as LangGraph `thread_id` | Gives cross-turn memory (SRS §9 stretch: "refine without repeating themselves") essentially for free | Custom Redis/Postgres state store — deferred, see §13 roadmap for durability across restarts |
 | D9 | **Untrusted-data fencing** (`<tool_data>...</tool_data>`) + a shared `GUARDRAILS` prompt block on every agent | Defends against indirect prompt injection carried in a tool result — see `SECURITY.md` §3 for the full rationale and its limits | Trusting tool output implicitly — rejected as unsafe for an MCP-based system by definition |
-| D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `_run_specialist` | Bounds worst-case OpenAI/Amadeus cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
+| D10 | **`MAX_TOOL_ROUNDS = 3`** hard cap per turn in `run_specialist` | Bounds worst-case OpenAI/Amadeus cost per message; a model that keeps calling tools is forced to summarize after 3 rounds instead of looping | Unbounded tool loop — rejected, cost/latency risk |
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
 | D13 | Docker-buildable **Railway-compatible services** for backend, frontend, and both MCP servers | One deployment model keeps the four-service topology reproducible locally and in production | Hugging Face Spaces Gradio frontend - replaced when the UI moved to Next.js |
@@ -84,7 +84,13 @@ what's actually installed (`pip show langchain-core`) over training data.
 
 ```
 backend/
-  main.py                    FastAPI app - see §5 for the request lifecycle
+  main.py                    ASGI entrypoint (`uvicorn main:app`)
+  config.py                  Typed settings loaded from environment
+  api/
+    app.py                    FastAPI app factory + CORS setup
+    routes.py                 /health, /session, /chat/stream handlers
+    schemas.py                HTTP and SSE Pydantic models
+    sse.py                    LangGraph event -> SSE event normalization
   conftest.py                 pytest sys.path bootstrap
   pytest.ini                   asyncio_mode = auto
   requirements.txt / requirements-dev.txt
@@ -95,8 +101,11 @@ backend/
     llm.py                     get_router_llm() / get_agent_llm() - OpenAI factory (D1)
     prompts.py                  All system prompts + shared GUARDRAILS block (D9)
     mcp_client.py                get_tools_for(server) - scoped loading + circuit breaker (D3, D7)
-    nodes.py                     classify_intent, general_qa_node, hotel_node, flight_node,
-                                  clarify_node, route_from_intent, _run_specialist (D2, D10)
+    history.py                   Bounded conversation-tail helper (D10)
+    tool_results.py              Untrusted-data fencing + simulated booking extraction (D6, D9)
+    specialist_runner.py         Shared hotel/flight tool-call loop (D2, D10)
+    nodes.py                     Thin LangGraph node adapters: classify_intent, general_qa_node,
+                                  hotel_node, flight_node, clarify_node, route_from_intent
     graph.py                     StateGraph wiring + MemorySaver (D8)
   core/
     __init__.py
@@ -104,8 +113,12 @@ backend/
                                   new_session_id/validate_session_id (D11, D12)
   tests/
     __init__.py
+    test_agent_helpers.py         Conversation trimming + tool-result extraction tests
+    test_api.py                   Endpoint security + SSE bridge tests
     test_graph.py                 Routing + graceful-degradation + tool-loop-cap tests
+    test_mcp_clients.py           Offline Amadeus client validation/contract tests
     test_security.py               Auth/rate-limit/validation tests
+    test_sse.py                    SSE event normalization tests
 
 mcp_servers/
   hotel_mcp/
@@ -143,9 +156,9 @@ between nodes (SRS §7). Full field list:
 | `missing_fields` | `list[str]` | reserved for explicit missing-field tracking — currently agents ask via natural language in `messages` rather than populating this list structurally; see §13 roadmap |
 | `clarification_question` | `str \| None` | `clarify_node` |
 | `hotel_results` / `flight_results` | `list[dict]` | reserved for structured result storage — currently results live in `messages` as tool output; see §13 |
-| `booking_confirmation` | `dict \| None` | `_run_specialist` after a successful simulated `book_hotel` / `book_flight` tool call; includes `type`, `server`, `tool_name`, provider-style confirmation fields, and `"simulated": true` |
-| `tool_calls` | `list[ToolCallRecord]` | `_run_specialist` (every call this turn, success or failure) |
-| `session_id` | `str` | `main.py`, becomes the LangGraph `thread_id` |
+| `booking_confirmation` | `dict \| None` | `run_specialist` after a successful simulated `book_hotel` / `book_flight` tool call; includes `type`, `server`, `tool_name`, provider-style confirmation fields, and `"simulated": true` |
+| `tool_calls` | `list[ToolCallRecord]` | `run_specialist` (every call this turn, success or failure) |
+| `session_id` | `str` | `api/routes.py`, becomes the LangGraph `thread_id` |
 
 `Intent`, `ActivityState`, `ToolCallStatus` are `str` Enums matching SRS §2
 and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
@@ -159,11 +172,11 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
    `POST /api/chat` route. The server-only proxy adds `X-API-Key` and
    forwards the request to FastAPI `POST /chat/stream` without buffering the
    SSE body.
-2. `main.py:chat_stream` — `require_api_key` → `check_rate_limit` →
+2. `api/routes.py:chat_stream` — `require_api_key` → `check_rate_limit` →
    `sanitize_user_message` → `validate_session_id` (mint one via
    `new_session_id()` if none supplied) → builds `inputs` for the graph.
 3. `graph.astream_events(inputs, config={"configurable": {"thread_id": session_id}}, version="v2")`
-   drives the whole turn; `main.py` always starts the SSE stream with
+   drives the whole turn; `api/routes.py` always starts the SSE stream with
    `{"type": "session", "session_id": ...}` and translates graph events:
    - `on_chain_start` for a known node name → `{"type": "status", "state": ...}`
    - `on_tool_start` / `on_tool_end` / `on_tool_error` → `{"type": "tool", "status": "INVOKED|SUCCEEDED|FAILED", ...}`
@@ -171,10 +184,10 @@ and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
 4. Inside the graph: `classify_intent` → conditional edge
    (`route_from_intent`) → one of `general_qa_node` / `hotel_node` /
    `flight_node` / `clarify_node` → `END`.
-5. Inside `hotel_node`/`flight_node` (`_run_specialist`): load scoped tools
+5. Inside `hotel_node`/`flight_node` (`run_specialist`): load scoped tools
    → bind → up to `MAX_TOOL_ROUNDS` rounds of (LLM decides → tool call,
    fenced + recorded → LLM sees result) → final answer.
-6. Any exception anywhere in step 3–5 is caught by `main.py`'s top-level
+6. Any exception anywhere in step 3–5 is caught by `api/routes.py`'s top-level
    try/except and turned into `{"type": "error", "message": "..."}` followed
    by `{"type": "done"}` — the generator still completes cleanly, the app
    never crashes.
@@ -258,14 +271,22 @@ buildable from its own Dockerfile.
 
 ## 11. Testing strategy
 
-`backend/tests/` — 37 tests, all offline:
+`backend/tests/` — 54 tests, all offline:
+- `test_agent_helpers.py` — conversation-history windowing, tool-result JSON
+  handling, untrusted-data fencing, and simulated booking-confirmation extraction.
+- `test_api.py` — endpoint auth/rate-limit/session behavior and the streaming
+  bridge using a fake graph.
 - `test_graph.py` — routing correctness (every `Intent` value, invalid-
   label fallback to `CLARIFY`), graceful degradation when a tool server is
   down, a failing tool call being recorded without crashing, and the
   `MAX_TOOL_ROUNDS` cap actually stopping a looping model.
+- `test_mcp_clients.py` — hotel/flight Amadeus client validation and request
+  parameter mapping without live provider calls.
 - `test_security.py` — sanitization edge cases, session-id validation
   (including a SQL-injection-shaped string, deliberately), rate-limit
   trip/independent-buckets, and all four API-key auth branches.
+- `test_sse.py` — LangGraph event to SSE event normalization and safe error
+  messages.
 
 `frontend/lib/sse.test.ts` covers the SSE frame parser used by the chat UI.
 
@@ -279,7 +300,7 @@ or Amadeus credentials are needed to run the backend suite or in CI.
 - `pip install` of backend and MCP requirements plus `npm install` for the
   Next.js frontend — no dependency conflicts, versions in §2.
 - `py_compile` of every `.py` file in the repo.
-- `pytest` — 37/37 passing against the real installed `langgraph`/
+- `pytest` — 54/54 passing against the real installed `langgraph`/
   `langchain-*` versions above (not just mocked at the import level —
   the actual graph, node, and security code executes).
 - Both MCP servers imported and their tools listed via `mcp.list_tools()`
@@ -326,7 +347,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 | Memory / context across turns | Done (D8, `MemorySaver`) |
 | Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §6 documents the exact steps |
 | Richer orchestration (combined hotel+flight itinerary in one turn) | `[ROADMAP]` — would add a `plan` node that fans out to both specialists and merges before responding |
-| Observability (structured tracing) | Partial — structured request-id logging exists in `main.py`; no distributed tracing (e.g. LangSmith) wired up |
+| Observability (structured tracing) | Partial — structured request-id logging exists in `api/routes.py`; no distributed tracing (e.g. LangSmith) wired up |
 | Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) and `booking_confirmation` as HTML cards |
 | Containerisation | Done (Dockerfile per service + docker-compose) |
 | CI | `[ROADMAP]` — no GitHub Actions workflow yet; `pytest` + `py_compile` from §12 is exactly what a CI job should run |
@@ -341,7 +362,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
   functions only — the tool interface (`server.py`) and every agent are
   already written against the real shape.
 - **Structured result cards**: populate `hotel_results`/`flight_results` in
-  `_run_specialist`'s return dict (fields already exist, unused today),
+  `run_specialist`'s return dict (fields already exist, unused today),
   then render them in `frontend/components/simple-chat.tsx` instead of/
   alongside markdown text.
 - **Horizontal scaling**: swap `core/security.py`'s in-memory rate-limit

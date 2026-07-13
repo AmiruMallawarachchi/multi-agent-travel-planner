@@ -56,21 +56,26 @@ so adding or swapping a travel data provider never touches agent code.
   session ("make it cheaper" works without repeating the city and dates)
 - **UX**: quick prompts, copyable messages, a "New chat" reset, retry-
   friendly error messages instead of stack traces
-- **Tests**: 26 unit tests covering routing, graceful degradation, and the
-  tool-loop cap, running against mocked LLM/tool calls (no API keys needed
-  in CI)
+- **Tests**: backend and frontend tests covering routing, graceful
+  degradation, SSE normalization, tool-result handling, MCP client
+  validation, and the tool-loop cap (no API keys needed in CI)
 
 ## Repository layout
 
 ```
 backend/
-  main.py                 FastAPI app: /health, /session, /chat/stream (SSE)
+  main.py                 ASGI entrypoint
+  api/                    FastAPI app factory, routes, schemas, SSE events
+  config.py               Typed backend settings
   agents/
     entity.py              Shared LangGraph state schema
     llm.py                 LLM factory (OpenAI)
     prompts.py              System prompts + shared guardrails block
     mcp_client.py            Resilient, per-server-scoped MCP tool loading
-    nodes.py                classify_intent / hotel / flight / general_qa / clarify
+    history.py              Conversation-window helper
+    tool_results.py          Untrusted tool-data fencing + booking extraction
+    specialist_runner.py     Shared tool-call loop for hotel/flight agents
+    nodes.py                Thin LangGraph node adapters
     graph.py                 StateGraph wiring + MemorySaver checkpointer
   core/security.py          Auth, rate limiting, input & session-id validation
   tests/                    pytest suite (mocked LLM/tools, no network needed)
@@ -140,11 +145,11 @@ npm run typecheck
 npm run build
 ```
 
-Backend tests are offline (LLM and MCP tool calls are mocked) - they check
-routing correctness, that a dead MCP server degrades a turn gracefully
-instead of crashing it, and that the tool-call loop cap actually stops
-runaway tool calling. Frontend checks cover the SSE parser, TypeScript, and
-the optimized Next.js build.
+Backend tests are offline (LLM, MCP, and provider HTTP calls are mocked) -
+they check routing correctness, graceful degradation, API/security behavior,
+SSE normalization, MCP client validation, booking-confirmation extraction,
+and the tool-call loop cap. Frontend checks cover the SSE parser,
+TypeScript, and the optimized Next.js build.
 
 ## Viva quick-reference
 
@@ -157,7 +162,7 @@ for the questions SRS section 11 says to expect:
 - **Missing-input handling** -> `agents/prompts.py` (agent rules 1),
   `clarify_node` in `agents/nodes.py`
 - **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
-  `_run_specialist`'s try/except in `agents/nodes.py`
-- **Streaming / activity cues** -> `main.py`'s `astream_events` bridge,
+  `run_specialist`'s try/except in `agents/specialist_runner.py`
+- **Streaming / activity cues** -> `api/routes.py` + `api/sse.py`,
   `frontend/components/simple-chat.tsx`'s SSE consumer
 - **Security** -> `SECURITY.md`
