@@ -11,20 +11,47 @@ Two responsibilities live here and nowhere else:
      instead of hanging the request or crashing the conversation
      (SRS section 5 & 7 - resilience is non-negotiable).
 """
+
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
+import httpx
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 
-ServerName = Literal["hotel-mcp", "flight-mcp"]
+ServerName = Literal[
+    "hotel-mcp",
+    "flight-mcp",
+    "itinerary-mcp",
+    "weather-mcp",
+    "currency-mcp",
+    "location-mcp",
+]
+ServerStatus = Literal["available", "unavailable"]
 
 HOTEL_MCP_URL = os.getenv("HOTEL_MCP_URL", "http://localhost:8001/mcp")
 FLIGHT_MCP_URL = os.getenv("FLIGHT_MCP_URL", "http://localhost:8002/mcp")
+ITINERARY_MCP_URL = os.getenv("ITINERARY_MCP_URL", "http://localhost:8003/mcp")
+WEATHER_MCP_URL = os.getenv("WEATHER_MCP_URL", "http://localhost:8004/mcp")
+CURRENCY_MCP_URL = os.getenv("CURRENCY_MCP_URL", "http://localhost:8005/mcp")
+LOCATION_MCP_URL = os.getenv("LOCATION_MCP_URL", "http://localhost:8006/mcp")
+
+MCP_SERVER_URLS: dict[ServerName, str] = {
+    "hotel-mcp": HOTEL_MCP_URL,
+    "flight-mcp": FLIGHT_MCP_URL,
+    "itinerary-mcp": ITINERARY_MCP_URL,
+    "weather-mcp": WEATHER_MCP_URL,
+    "currency-mcp": CURRENCY_MCP_URL,
+    "location-mcp": LOCATION_MCP_URL,
+}
+HEALTH_TIMEOUT = httpx.Timeout(connect=1.0, read=2.0, write=1.0, pool=1.0)
+logger = logging.getLogger("tripweaver.mcp")
 
 # After this many consecutive failures, stop hitting the server for a while
 # instead of making every traveller wait out a timeout on a server that's down.
@@ -50,15 +77,16 @@ class _Breaker:
             self.open_until = time.monotonic() + BREAKER_COOLDOWN_SECONDS
 
 
-_breakers: dict[str, _Breaker] = {"hotel-mcp": _Breaker(), "flight-mcp": _Breaker()}
+_breakers: dict[ServerName, _Breaker] = {
+    server: _Breaker() for server in MCP_SERVER_URLS
+}
 
-# One client, both servers. Adding a third MCP server later (SRS section 9
-# stretch - "activities, local transport, weather") means adding one entry
-# here and one new node/prompt pair - nothing else in the graph changes.
+# One client owns the service registry while each specialist still loads only
+# its explicitly configured server set.
 _client = MultiServerMCPClient(
     {
-        "hotel-mcp": {"url": HOTEL_MCP_URL, "transport": "http"},
-        "flight-mcp": {"url": FLIGHT_MCP_URL, "transport": "http"},
+        server: {"url": url, "transport": "http"}
+        for server, url in MCP_SERVER_URLS.items()
     }
 )
 
@@ -81,6 +109,42 @@ async def get_tools_for(server: ServerName) -> list:
             tools = await load_mcp_tools(session)
         _breakers[server].record_success()
         return tools
-    except Exception:
+    except Exception:  # noqa: BLE001 - discovery failures degrade one capability
         _breakers[server].record_failure()
+        logger.warning("MCP tool discovery failed for %s", server)
         return []
+
+
+def _health_url(mcp_url: str) -> str:
+    base_url = mcp_url.rstrip("/")
+    if base_url.endswith("/mcp"):
+        base_url = base_url[:-4]
+    return f"{base_url}/health"
+
+
+async def _probe_server(_server: ServerName, mcp_url: str) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT) as client:
+            response = await client.get(_health_url(mcp_url))
+        if response.status_code >= 400:
+            return False
+        payload = response.json()
+        return isinstance(payload, dict) and payload.get("status") == "ok"
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+async def get_server_statuses() -> dict[ServerName, ServerStatus]:
+    """Probe each MCP process without exposing internal service URLs."""
+    servers = list(MCP_SERVER_URLS)
+    probes = await asyncio.gather(
+        *(_probe_server(server, MCP_SERVER_URLS[server]) for server in servers),
+        return_exceptions=True,
+    )
+    return {
+        server: cast(
+            ServerStatus,
+            "available" if result is True else "unavailable",
+        )
+        for server, result in zip(servers, probes, strict=True)
+    }

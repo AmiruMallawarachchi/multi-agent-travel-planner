@@ -1,7 +1,8 @@
 """Request/response schemas for the HTTP API."""
+
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     service: str
+    mcp_servers: dict[str, Literal["available", "unavailable"]]
 
 
 class SessionResponse(BaseModel):
@@ -37,6 +39,15 @@ class ToolEvent(BaseModel):
     tool: str
 
 
+class ResultEvent(BaseModel):
+    type: Literal["result"] = "result"
+    result_type: Literal[
+        "flight", "hotel", "itinerary", "weather", "currency", "location"
+    ]
+    tool: str
+    data: Any
+
+
 class TokenEvent(BaseModel):
     type: Literal["token"] = "token"
     content: str
@@ -51,4 +62,12 @@ class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
 
 
-StreamEvent = SessionEvent | StatusEvent | ToolEvent | TokenEvent | ErrorEvent | DoneEvent
+StreamEvent = (
+    SessionEvent
+    | StatusEvent
+    | ToolEvent
+    | ResultEvent
+    | TokenEvent
+    | ErrorEvent
+    | DoneEvent
+)

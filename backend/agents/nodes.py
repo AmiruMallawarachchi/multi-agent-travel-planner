@@ -13,6 +13,7 @@ GUARDRAILS) tells the model that content is data to report, never a command
 to obey. This is TripWeaver's answer to indirect prompt injection / "tool
 poisoning" - a well-known MCP-specific attack class.
 """
+
 from __future__ import annotations
 
 from langchain_core.messages import SystemMessage
@@ -22,12 +23,21 @@ from agents.history import recent_history
 from agents.llm import get_agent_llm, get_router_llm
 from agents.prompts import (
     CLARIFYING_PROMPT,
+    CURRENCY_AGENT_SYSTEM_PROMPT,
     FLIGHT_AGENT_SYSTEM_PROMPT,
     GENERAL_QA_SYSTEM_PROMPT,
     HOTEL_AGENT_SYSTEM_PROMPT,
     INTENT_CLASSIFIER_PROMPT,
+    ITINERARY_AGENT_SYSTEM_PROMPT,
+    LOCATION_AGENT_SYSTEM_PROMPT,
+    WEATHER_AGENT_SYSTEM_PROMPT,
 )
-from agents.specialist_runner import MAX_TOOL_ROUNDS, SpecialistConfig, run_specialist
+from agents.mcp_client import ServerName
+from agents.specialist_runner import (
+    MAX_TOOL_ROUNDS as MAX_TOOL_ROUNDS,
+    SpecialistConfig,
+    run_specialist,
+)
 
 VALID_INTENTS = {i.value for i in Intent}
 
@@ -72,24 +82,74 @@ async def general_qa_node(state: TripWeaverState) -> dict:
 
 
 async def _run_specialist(
-    state: TripWeaverState, *, server: str, system_prompt: str, agent_name: str
+    state: TripWeaverState,
+    *,
+    servers: tuple[ServerName, ...],
+    system_prompt: str,
+    agent_name: str,
 ) -> dict:
     """Compatibility wrapper for the graph node functions."""
     return await run_specialist(
         state,
-        SpecialistConfig(server=server, system_prompt=system_prompt, agent_name=agent_name),
+        SpecialistConfig(
+            servers=servers,
+            system_prompt=system_prompt,
+            agent_name=agent_name,
+        ),
     )
 
 
 async def hotel_node(state: TripWeaverState) -> dict:
     return await _run_specialist(
-        state, server="hotel-mcp", system_prompt=HOTEL_AGENT_SYSTEM_PROMPT, agent_name="hotel"
+        state,
+        servers=("hotel-mcp",),
+        system_prompt=HOTEL_AGENT_SYSTEM_PROMPT,
+        agent_name="hotel",
     )
 
 
 async def flight_node(state: TripWeaverState) -> dict:
     return await _run_specialist(
-        state, server="flight-mcp", system_prompt=FLIGHT_AGENT_SYSTEM_PROMPT, agent_name="flight"
+        state,
+        servers=("flight-mcp",),
+        system_prompt=FLIGHT_AGENT_SYSTEM_PROMPT,
+        agent_name="flight",
+    )
+
+
+async def itinerary_node(state: TripWeaverState) -> dict:
+    return await _run_specialist(
+        state,
+        servers=("location-mcp", "itinerary-mcp"),
+        system_prompt=ITINERARY_AGENT_SYSTEM_PROMPT,
+        agent_name="itinerary",
+    )
+
+
+async def weather_node(state: TripWeaverState) -> dict:
+    return await _run_specialist(
+        state,
+        servers=("weather-mcp",),
+        system_prompt=WEATHER_AGENT_SYSTEM_PROMPT,
+        agent_name="weather",
+    )
+
+
+async def currency_node(state: TripWeaverState) -> dict:
+    return await _run_specialist(
+        state,
+        servers=("currency-mcp",),
+        system_prompt=CURRENCY_AGENT_SYSTEM_PROMPT,
+        agent_name="currency",
+    )
+
+
+async def location_node(state: TripWeaverState) -> dict:
+    return await _run_specialist(
+        state,
+        servers=("location-mcp",),
+        system_prompt=LOCATION_AGENT_SYSTEM_PROMPT,
+        agent_name="location",
     )
 
 

@@ -5,6 +5,7 @@ mocked so these run offline, deterministically, in CI - they prove the
 *wiring* (routing, state merging, graceful degradation) is correct, which
 is the part that's easy to get subtly wrong and hard to eyeball-review.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -13,8 +14,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from agents.entity import ActivityState, Intent, new_state
-from agents.nodes import classify_intent, flight_node, hotel_node, route_from_intent
+from agents.entity import ActivityState, Intent, ToolCallStatus, new_state
+from agents.nodes import (
+    classify_intent,
+    currency_node,
+    flight_node,
+    hotel_node,
+    itinerary_node,
+    location_node,
+    route_from_intent,
+    weather_node,
+)
 
 
 def _fake_llm(reply_content: str, tool_calls: list | None = None):
@@ -58,6 +68,87 @@ class TestRouting:
         state["intent"] = None
         assert route_from_intent(state) == Intent.CLARIFY.value
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("node", "expected_agent", "expected_servers"),
+        [
+            (hotel_node, "hotel", ("hotel-mcp",)),
+            (flight_node, "flight", ("flight-mcp",)),
+            (itinerary_node, "itinerary", ("location-mcp", "itinerary-mcp")),
+            (weather_node, "weather", ("weather-mcp",)),
+            (currency_node, "currency", ("currency-mcp",)),
+            (location_node, "location", ("location-mcp",)),
+        ],
+    )
+    async def test_specialist_nodes_use_scoped_server_sets(
+        self, node, expected_agent, expected_servers
+    ):
+        state = new_state("s1", "help me travel")
+        with patch(
+            "agents.nodes.run_specialist", new=AsyncMock(return_value={})
+        ) as runner:
+            await node(state)
+
+        config = runner.await_args.args[1]
+        assert config.agent_name == expected_agent
+        assert config.servers == expected_servers
+
+
+class TestMultiServerSpecialist:
+    @pytest.mark.asyncio
+    async def test_itinerary_records_each_tool_against_its_own_server(self):
+        state = new_state("s1", "plan three days in Dubai")
+        place_tool = SimpleNamespace(
+            name="search_places",
+            ainvoke=AsyncMock(return_value={"ok": True, "places": []}),
+        )
+        itinerary_tool = SimpleNamespace(
+            name="create_itinerary",
+            ainvoke=AsyncMock(return_value={"ok": True, "itinerary": {"days": []}}),
+        )
+        place_call = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "search_places",
+                    "args": {"query": "attractions", "near": "Dubai"},
+                    "id": "places_1",
+                }
+            ],
+        )
+        itinerary_call = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "create_itinerary",
+                    "args": {
+                        "destination": "Dubai",
+                        "start_date": "2026-08-01",
+                        "end_date": "2026-08-03",
+                    },
+                    "id": "itinerary_1",
+                }
+            ],
+        )
+        final_reply = AIMessage(content="Your itinerary is ready.")
+        llm = SimpleNamespace()
+        llm.ainvoke = AsyncMock(side_effect=[place_call, itinerary_call, final_reply])
+        llm.bind_tools = lambda _tools: llm
+
+        async def tools_for(server):
+            return [place_tool] if server == "location-mcp" else [itinerary_tool]
+
+        with (
+            patch("agents.specialist_runner.get_tools_for", side_effect=tools_for),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
+        ):
+            result = await itinerary_node(state)
+
+        assert [record["server"] for record in result["tool_calls"]] == [
+            "location-mcp",
+            "itinerary-mcp",
+        ]
+
 
 class TestGracefulDegradation:
     @pytest.mark.asyncio
@@ -67,10 +158,15 @@ class TestGracefulDegradation:
         get_tools_for returning [] (server down / circuit breaker open),
         the node must still return a normal, non-crashing turn."""
         state = new_state("s1", "find me a hotel in Paris")
-        fake_reply = _fake_llm("I can't reach live hotel data right now - please try again shortly.")
+        fake_reply = _fake_llm(
+            "I can't reach live hotel data right now - please try again shortly."
+        )
 
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=fake_reply
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[])
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=fake_reply),
         ):
             result = await hotel_node(state)
 
@@ -86,19 +182,29 @@ class TestGracefulDegradation:
         propagate an exception up through the graph."""
         state = new_state("s1", "find me a hotel in Paris, Sep 10-14")
 
-        failing_tool = SimpleNamespace(name="search_hotels", ainvoke=AsyncMock(side_effect=RuntimeError("boom")))
+        failing_tool = SimpleNamespace(
+            name="search_hotels", ainvoke=AsyncMock(side_effect=RuntimeError("boom"))
+        )
         first_call = AIMessage(
             content="",
-            tool_calls=[{"name": "search_hotels", "args": {"city_code": "PAR"}, "id": "call_1"}],
+            tool_calls=[
+                {"name": "search_hotels", "args": {"city_code": "PAR"}, "id": "call_1"}
+            ],
         )
-        second_call = AIMessage(content="I couldn't fetch hotels just now - please try again shortly.")
+        second_call = AIMessage(
+            content="I couldn't fetch hotels just now - please try again shortly."
+        )
 
         llm = SimpleNamespace()
         llm.ainvoke = AsyncMock(side_effect=[first_call, second_call])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[failing_tool])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=llm
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for",
+                new=AsyncMock(return_value=[failing_tool]),
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
         ):
             result = await hotel_node(state)
 
@@ -119,7 +225,8 @@ class TestBookingConfirmation:
             "simulated": True,
         }
         booking_tool = SimpleNamespace(
-            name="book_hotel", ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation})
+            name="book_hotel",
+            ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation}),
         )
         first_call = AIMessage(
             content="",
@@ -131,14 +238,20 @@ class TestBookingConfirmation:
                 }
             ],
         )
-        final_reply = AIMessage(content="Your simulated hotel booking is confirmed: TW-H-1234ABCD.")
+        final_reply = AIMessage(
+            content="Your simulated hotel booking is confirmed: TW-H-1234ABCD."
+        )
 
         llm = SimpleNamespace()
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=llm
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for",
+                new=AsyncMock(return_value=[booking_tool]),
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
         ):
             result = await hotel_node(state)
 
@@ -163,26 +276,36 @@ class TestBookingConfirmation:
             "simulated": True,
         }
         booking_tool = SimpleNamespace(
-            name="book_flight", ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation})
+            name="book_flight",
+            ainvoke=AsyncMock(return_value={"ok": True, "confirmation": confirmation}),
         )
         first_call = AIMessage(
             content="",
             tool_calls=[
                 {
                     "name": "book_flight",
-                    "args": {"offer_id": "flight-offer-1", "traveller_name": "Alex Morgan"},
+                    "args": {
+                        "offer_id": "flight-offer-1",
+                        "traveller_name": "Alex Morgan",
+                    },
                     "id": "call_1",
                 }
             ],
         )
-        final_reply = AIMessage(content="Your simulated flight booking is confirmed: TW-F-5678EFGH.")
+        final_reply = AIMessage(
+            content="Your simulated flight booking is confirmed: TW-F-5678EFGH."
+        )
 
         llm = SimpleNamespace()
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=llm
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for",
+                new=AsyncMock(return_value=[booking_tool]),
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
         ):
             result = await flight_node(state)
 
@@ -199,25 +322,41 @@ class TestBookingConfirmation:
     async def test_failed_booking_response_does_not_create_confirmation(self):
         state = new_state("s1", "book the hotel")
         booking_tool = SimpleNamespace(
-            name="book_hotel", ainvoke=AsyncMock(return_value={"ok": False, "error": "guest_name is required"})
+            name="book_hotel",
+            ainvoke=AsyncMock(
+                return_value={"ok": False, "error": "guest_name is required"}
+            ),
         )
         first_call = AIMessage(
             content="",
-            tool_calls=[{"name": "book_hotel", "args": {"offer_id": "hotel-offer-1"}, "id": "call_1"}],
+            tool_calls=[
+                {
+                    "name": "book_hotel",
+                    "args": {"offer_id": "hotel-offer-1"},
+                    "id": "call_1",
+                }
+            ],
         )
-        final_reply = AIMessage(content="I need the guest name before I can simulate the booking.")
+        final_reply = AIMessage(
+            content="I need the guest name before I can simulate the booking."
+        )
 
         llm = SimpleNamespace()
         llm.ainvoke = AsyncMock(side_effect=[first_call, final_reply])
         llm.bind_tools = lambda _tools: llm
 
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[booking_tool])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=llm
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for",
+                new=AsyncMock(return_value=[booking_tool]),
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
         ):
             result = await hotel_node(state)
 
         assert "booking_confirmation" not in result
         assert result["tool_calls"][0]["detail"] is None
+        assert result["tool_calls"][0]["status"] == ToolCallStatus.FAILED
 
 
 class TestToolLoopCap:
@@ -228,7 +367,9 @@ class TestToolLoopCap:
         guardrail against runaway API/provider usage."""
         from agents import nodes as nodes_module
 
-        looping_tool = SimpleNamespace(name="search_hotels", ainvoke=AsyncMock(return_value="offer A"))
+        looping_tool = SimpleNamespace(
+            name="search_hotels", ainvoke=AsyncMock(return_value="offer A")
+        )
         always_calls = AIMessage(
             content="",
             tool_calls=[{"name": "search_hotels", "args": {}, "id": "x"}],
@@ -242,8 +383,12 @@ class TestToolLoopCap:
         llm.bind_tools = lambda _tools: llm
 
         state = new_state("s1", "keep searching")
-        with patch("agents.specialist_runner.get_tools_for", new=AsyncMock(return_value=[looping_tool])), patch(
-            "agents.specialist_runner.get_agent_llm", return_value=llm
+        with (
+            patch(
+                "agents.specialist_runner.get_tools_for",
+                new=AsyncMock(return_value=[looping_tool]),
+            ),
+            patch("agents.specialist_runner.get_agent_llm", return_value=llm),
         ):
             result = await hotel_node(state)
 
