@@ -1,11 +1,24 @@
 # TripWeaver frontend
 
-Minimal Next.js chat frontend for TripWeaver. It keeps the UI intentionally
-simple: a shadcn/prompt-kit inspired chat shell, markdown rendering, code
-blocks, quick prompts, and a server-side SSE proxy to the FastAPI backend.
+Responsive Next.js travel workspace built with shadcn/ui, Radix primitives,
+Tailwind CSS, and Lucide icons. The interface has three coordinated areas:
+conversation history, the streaming chat, and live tools/trip context.
+
+Implemented interactions include:
+
+- locally persisted conversation history, search, new chat, and clear history
+- export, copy, and Web Share support
+- text-file attachments and browser speech recognition when available
+- live agent/MCP status driven by backend SSE events
+- trip-context extraction for destination, dates, travellers, budget, and preferences
+- working flight/hotel quick actions, with future MCP actions clearly unavailable
+- settings for persistence, tool activity, and light/dark appearance
+- responsive history and status sheets on smaller screens
 
 The browser never receives OpenAI, Amadeus, or backend API credentials.
 `BACKEND_API_KEY` is read only by the Next.js server route at `/api/chat`.
+`/api/health` performs a real backend health check so the UI does not show a
+fabricated online state.
 
 ## Local dev
 
@@ -24,7 +37,12 @@ npm test
 npm run lint
 npm run typecheck
 npm run build
+npm audit
 ```
+
+Vitest covers the API proxy, health reporting, conversation helpers, trip
+context extraction, SSE-to-tool-state handling, and user-facing workspace
+interactions.
 
 ## Environment
 

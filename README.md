@@ -27,8 +27,8 @@ flowchart TD
     FM <--> AM2["Amadeus test API"]
 ```
 
-Three independently deployable processes: **frontend** (Next.js), **backend**
-(FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
+Four independently deployable services: **frontend** (Next.js), **backend**
+(FastAPI + LangGraph), **hotel MCP**, and **flight MCP**. Agents
 never call Amadeus directly - only through their own server's MCP tools -
 so adding or swapping a travel data provider never touches agent code.
 
@@ -42,7 +42,8 @@ so adding or swapping a travel data provider never touches agent code.
   / CLARIFYING - shown as a small live state in the chat header)
 - Graceful degradation: a dead MCP server never crashes the app
 - Follow-up questions for missing input, never guessed values
-- Minimal shadcn/prompt-kit inspired chat UI with markdown and code blocks
+- Responsive shadcn/ui travel workspace with chat history, live tool status,
+  trip context, markdown, and code blocks
 
 **Added on top**
 - **Security**: API-key auth, per-identity rate limiting, three-layer input
@@ -54,7 +55,8 @@ so adding or swapping a travel data provider never touches agent code.
   history trimming, result-count caps - all to keep cost and latency bounded
 - **Memory**: LangGraph `MemorySaver` gives free cross-turn context per
   session ("make it cheaper" works without repeating the city and dates)
-- **UX**: quick prompts, copyable messages, a "New chat" reset, retry-
+- **UX**: searchable local chat history, export/share, attachments, supported
+  voice input, quick actions, settings, trip-context extraction, and retry-
   friendly error messages instead of stack traces
 - **Tests**: backend and frontend tests covering routing, graceful
   degradation, SSE normalization, tool-result handling, MCP client
@@ -83,9 +85,11 @@ mcp_servers/
   hotel_mcp/                 list_hotels / search_hotels / book_hotel
   flight_mcp/                 list_flights / search_flights / book_flight
 frontend/
-  app/                       Next.js app routes and API proxy
-  components/                Simple chat shell + prompt-kit style code blocks
-  lib/                       SSE parser and frontend tests
+  app/                       Next.js routes, backend proxy, and health bridge
+  components/ui/             shadcn/ui component source
+  components/tripweaver/     Workspace, chat, history, settings, and status UI
+  features/tripweaver/       Conversation, trip-context, and stream-state logic
+  lib/                       SSE parser and shared helpers
 docker-compose.yml            Run all four services together, locally
 SYSTEM.md / SECURITY.md / MCP_SETUP.md
 ```
@@ -148,8 +152,10 @@ npm run build
 Backend tests are offline (LLM, MCP, and provider HTTP calls are mocked) -
 they check routing correctness, graceful degradation, API/security behavior,
 SSE normalization, MCP client validation, booking-confirmation extraction,
-and the tool-call loop cap. Frontend checks cover the SSE parser,
-TypeScript, and the optimized Next.js build.
+and the tool-call loop cap. Frontend tests cover the API bridge, SSE parser,
+conversation persistence/search/export, trip-context extraction, tool-state
+mapping, and workspace interactions, followed by TypeScript, lint, audit, and
+the optimized Next.js build.
 
 ## Viva quick-reference
 
@@ -164,5 +170,6 @@ for the questions SRS section 11 says to expect:
 - **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
   `run_specialist`'s try/except in `agents/specialist_runner.py`
 - **Streaming / activity cues** -> `api/routes.py` + `api/sse.py`,
-  `frontend/components/simple-chat.tsx`'s SSE consumer
+  `frontend/components/tripweaver/tripweaver-app.tsx` and
+  `frontend/features/tripweaver/stream-state.ts`
 - **Security** -> `SECURITY.md`

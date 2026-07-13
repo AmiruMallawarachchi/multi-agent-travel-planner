@@ -19,8 +19,8 @@ A traveller chats in natural language. A LangGraph workflow classifies
 intent and routes to one of three specialist agents (General QA, Hotel,
 Flight). The Hotel and Flight agents reach real external data **only**
 through their own MCP server, which wraps the Amadeus for Developers
-self-service test API. Responses stream token-by-token to a minimal Next.js
-chat frontend over Server-Sent Events, with a live agent-activity indicator.
+self-service test API. Responses stream token-by-token to a responsive Next.js
+travel workspace over Server-Sent Events, with live agent and MCP activity.
 
 Built against the "MCP-Based Multi-Agent Travel Planner" Extension Sprint
 SRS. Section references below (e.g. "SRS §5") point at that spec.
@@ -44,7 +44,7 @@ SRS. Section references below (e.g. "SRS §5") point at that spec.
 | D11 | **API-key auth + per-identity rate limiting** on every billable endpoint (`core/security.py`) | The chat endpoint costs real money per call; SRS doesn't mandate this but a "product, not a demo" does | Leave open, rely on obscurity — rejected |
 | D12 | Session ids are **server-issued UUID4 hex**, validated on every use, never client-chosen | Prevents one traveller reading another's conversation by guessing/enumerating a `thread_id` | Client-generated session ids — rejected, no unguessability guarantee |
 | D13 | Docker-buildable **Railway-compatible services** for backend, frontend, and both MCP servers | One deployment model keeps the four-service topology reproducible locally and in production | Hugging Face Spaces Gradio frontend - replaced when the UI moved to Next.js |
-| D14 | Minimal **Next.js chat frontend** with shadcn/prompt-kit inspired layout, markdown, and code blocks | Keeps the product focused while the frontend direction is rebuilt step by step; chat remains the only committed surface for now | Rich travel cockpit - deferred until the design is guided and approved |
+| D14 | Responsive **shadcn/ui TripWeaver workspace** with conversation history, streaming chat, live tool state, trip context, quick actions, settings, and mobile sheets | Matches the approved TripWeaver interface while keeping provider-backed capabilities honest: flight/hotel are active, future MCPs are visibly unavailable | Generic minimal chat shell - replaced because it did not represent the product workflow |
 
 ---
 
@@ -131,9 +131,11 @@ mcp_servers/
     requirements.txt / Dockerfile / railway.json / .env.example
 
 frontend/
-  app/                           Next.js app routes + same-origin backend proxy
-  components/                    Simple chat shell + prompt-kit style code blocks
-  lib/                           SSE parser + focused tests
+  app/                           Next.js routes + same-origin backend/health proxy
+  components/ui/                 shadcn/ui source components
+  components/tripweaver/         Workspace, chat, history, settings, status panels
+  features/tripweaver/           Conversation, trip-context, stream-state domain logic
+  lib/                           SSE parser + shared helpers
   package.json / Dockerfile / README.md / .env.example
 
 docker-compose.yml              All 4 services wired together for local dev
@@ -162,7 +164,8 @@ between nodes (SRS §7). Full field list:
 
 `Intent`, `ActivityState`, `ToolCallStatus` are `str` Enums matching SRS §2
 and §6's tables exactly — the frontend's `ACTIVITY_LABELS` dict in
-`frontend/components/simple-chat.tsx` is a direct rendering of `ActivityState`.
+`frontend/features/tripweaver/stream-state.ts` maps `ActivityState` and tool
+events into the chat activity rows and right-side MCP status panel.
 
 ---
 
@@ -288,7 +291,9 @@ buildable from its own Dockerfile.
 - `test_sse.py` — LangGraph event to SSE event normalization and safe error
   messages.
 
-`frontend/lib/sse.test.ts` covers the SSE frame parser used by the chat UI.
+Frontend Vitest suites cover the SSE parser, API proxy and backend-health
+bridge, conversation persistence/search/export, trip-context extraction,
+SSE-to-MCP state mapping, and end-user workspace interactions.
 
 LLM and MCP tool calls are mocked (`unittest.mock`) — no `OPENAI_API_KEY`
 or Amadeus credentials are needed to run the backend suite or in CI.
@@ -321,8 +326,8 @@ or Amadeus credentials are needed to run the backend suite or in CI.
   (confirmed 429s after the configured threshold, per-identity buckets
   independent). One real bug was caught this way — `/session` was
   missing its `check_rate_limit` call — and fixed; see D11.
-- Frontend `vitest`, TypeScript, and optimized `next build` pass for the
-  minimal chat app and same-origin API proxy.
+- Frontend `vitest`, ESLint, TypeScript, `npm audit`, and optimized `next build`
+  pass for the shadcn/ui workspace and same-origin API proxy.
 
 What was **not** verified (no network access to these domains from the
 build sandbox): a real OpenAI completion, and a real Amadeus API response
@@ -348,7 +353,7 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
 | Additional MCP services (activities/transport/weather) | `[ROADMAP]` — `MCP_SETUP.md` §6 documents the exact steps |
 | Richer orchestration (combined hotel+flight itinerary in one turn) | `[ROADMAP]` — would add a `plan` node that fans out to both specialists and merges before responding |
 | Observability (structured tracing) | Partial — structured request-id logging exists in `api/routes.py`; no distributed tracing (e.g. LangSmith) wired up |
-| Result cards / structured hotel-flight layout in UI | `[ROADMAP]` — currently markdown text in the chat bubble; would render `hotel_results`/`flight_results` (already reserved in `entity.py`) and `booking_confirmation` as HTML cards |
+| Provider-backed flight/hotel result cards | `[ROADMAP]` — tool progress and itinerary dialogs are implemented, but provider results still arrive as markdown because `hotel_results`/`flight_results` are not populated yet |
 | Containerisation | Done (Dockerfile per service + docker-compose) |
 | CI | `[ROADMAP]` — no GitHub Actions workflow yet; `pytest` + `py_compile` from §12 is exactly what a CI job should run |
 
@@ -362,9 +367,9 @@ travel-themed responsive UI, both deployments, env-var hygiene, docs.
   functions only — the tool interface (`server.py`) and every agent are
   already written against the real shape.
 - **Structured result cards**: populate `hotel_results`/`flight_results` in
-  `run_specialist`'s return dict (fields already exist, unused today),
-  then render them in `frontend/components/simple-chat.tsx` instead of/
-  alongside markdown text.
+  `run_specialist`'s return dict (fields already exist, unused today), then
+  add typed card renderers under `frontend/components/tripweaver/` alongside
+  the existing markdown response.
 - **Horizontal scaling**: swap `core/security.py`'s in-memory rate-limit
   dict and `MemorySaver` for Redis-backed equivalents — both are isolated
   behind small interfaces already.
