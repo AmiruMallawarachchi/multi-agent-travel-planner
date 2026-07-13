@@ -1,13 +1,16 @@
 import type { Metadata } from "next"
-import "./globals.css"
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
+import { Geist } from "next/font/google"
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+import { AppProviders } from "@/components/app-providers"
+import { cn } from "@/lib/utils"
+
+import "./globals.css"
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
 
 export const metadata: Metadata = {
   title: "TripWeaver",
-  description: "A minimal AI travel chat for TripWeaver.",
+  description: "Plan trips with AI agents for flights, hotels, and practical travel guidance.",
 }
 
 export default function RootLayout({
@@ -17,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body>
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   )
 }

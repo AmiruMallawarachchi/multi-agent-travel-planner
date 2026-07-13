@@ -1,5 +1,5 @@
-import { SimpleChat } from "@/components/simple-chat"
+import { TripWeaverApp } from "@/components/tripweaver/tripweaver-app"
 
 export default function Home() {
-  return <SimpleChat />
+  return <TripWeaverApp />
 }

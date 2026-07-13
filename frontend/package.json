@@ -31,13 +31,21 @@
     "@eslint/eslintrc": "3.3.6",
     "@eslint/js": "9.39.5",
     "@tailwindcss/postcss": "^4.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "22.20.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^5.0.4",
     "eslint": "9.39.5",
     "eslint-config-next": "15.5.20",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.2",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
   }
 }
