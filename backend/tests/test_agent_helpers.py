@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from agents.entity import new_state
 from agents.history import MAX_HISTORY_MESSAGES, recent_history
-from agents.tool_results import extract_booking_confirmation, fence_untrusted, tool_result_dict
+from agents.tool_results import (
+    extract_booking_confirmation,
+    fence_untrusted,
+    tool_result_dict,
+)
 
 
 def test_recent_history_returns_bounded_tail():
@@ -27,6 +31,9 @@ def test_fence_untrusted_marks_and_caps_external_data():
 def test_tool_result_dict_accepts_dict_and_json_object_string():
     assert tool_result_dict({"ok": True}) == {"ok": True}
     assert tool_result_dict('{"ok": true}') == {"ok": True}
+    assert tool_result_dict(
+        [{"type": "text", "text": '{"ok": true, "weather": {"daily": []}}'}]
+    ) == {"ok": True, "weather": {"daily": []}}
     assert tool_result_dict("[1, 2]") is None
     assert tool_result_dict("not json") is None
 
@@ -54,7 +61,12 @@ def test_extract_booking_confirmation_requires_successful_simulated_booking():
 
 
 def test_extract_booking_confirmation_rejects_non_booking_or_unsimulated_results():
-    assert extract_booking_confirmation(tool_name="search_hotels", server="hotel-mcp", raw_result={}) is None
+    assert (
+        extract_booking_confirmation(
+            tool_name="search_hotels", server="hotel-mcp", raw_result={}
+        )
+        is None
+    )
     assert (
         extract_booking_confirmation(
             tool_name="book_hotel",

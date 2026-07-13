@@ -68,10 +68,15 @@ def test_stream_events_from_graph_event_emits_normalized_structured_results():
         "event": "on_tool_end",
         "name": "get_weather_forecast",
         "data": {
-            "output": {
-                "ok": True,
-                "weather": {"location": {"name": "Tokyo"}, "daily": []},
-            }
+            "output": [
+                {
+                    "type": "text",
+                    "text": (
+                        '{"ok": true, "weather": '
+                        '{"location": {"name": "Tokyo"}, "daily": []}}'
+                    ),
+                }
+            ]
         },
     }
 

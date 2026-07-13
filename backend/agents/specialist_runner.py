@@ -16,6 +16,7 @@ from agents.tool_results import (
     extract_booking_confirmation,
     fence_untrusted,
     tool_result_dict,
+    tool_result_text,
 )
 
 MAX_TOOL_ROUNDS = 3
@@ -88,7 +89,7 @@ async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> di
             else:
                 try:
                     raw_result = await tool.ainvoke(call["args"])
-                    content = fence_untrusted(str(raw_result))
+                    content = fence_untrusted(tool_result_text(raw_result))
                     result_data = tool_result_dict(raw_result)
                     call_status = (
                         ToolCallStatus.FAILED

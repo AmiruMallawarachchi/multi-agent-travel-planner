@@ -1,4 +1,5 @@
 """Helpers for safely handling MCP tool results."""
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,19 @@ def fence_untrusted(raw: str) -> str:
 
 def tool_result_dict(raw_result: Any) -> dict[str, Any] | None:
     if isinstance(raw_result, dict):
+        if raw_result.get("type") == "text" and isinstance(raw_result.get("text"), str):
+            return tool_result_dict(raw_result["text"])
         return raw_result
+    if isinstance(raw_result, list):
+        text_parts: list[str] = []
+        for item in raw_result:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                text_parts.append(item["text"])
+            elif isinstance(getattr(item, "text", None), str):
+                text_parts.append(item.text)
+        return tool_result_dict("".join(text_parts)) if text_parts else None
+    if hasattr(raw_result, "content"):
+        return tool_result_dict(raw_result.content)
     if isinstance(raw_result, str):
         try:
             data = json.loads(raw_result)
@@ -23,6 +36,14 @@ def tool_result_dict(raw_result: Any) -> dict[str, Any] | None:
             return None
         return data if isinstance(data, dict) else None
     return None
+
+
+def tool_result_text(raw_result: Any) -> str:
+    """Return stable JSON for structured MCP content blocks when possible."""
+    parsed = tool_result_dict(raw_result)
+    if parsed is not None:
+        return json.dumps(parsed, ensure_ascii=True, separators=(",", ":"))
+    return str(raw_result)
 
 
 def booking_type(tool_name: str) -> str | None:
