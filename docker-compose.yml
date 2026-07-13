@@ -33,7 +33,7 @@ services:
     environment:
       HOTEL_MCP_URL: http://hotel-mcp:8001/mcp
       FLIGHT_MCP_URL: http://flight-mcp:8002/mcp
-      ALLOWED_ORIGINS: http://localhost:7860
+      ALLOWED_ORIGINS: http://localhost:3000
     ports: ["8000:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -49,6 +49,6 @@ services:
     env_file: ./frontend/.env
     environment:
       BACKEND_URL: http://backend:8000
-    ports: ["7860:7860"]
+    ports: ["3000:3000"]
     depends_on:
       backend: { condition: service_healthy }
