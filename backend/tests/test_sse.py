@@ -34,10 +34,24 @@ def test_stream_events_from_graph_event_maps_chain_tool_and_token_events():
 
     events = list(
         stream_events_from_graph_event(
-            {"event": "on_chat_model_stream", "data": {"chunk": Chunk([{"text": "hi"}])}}
+            {
+                "event": "on_chat_model_stream",
+                "metadata": {"langgraph_node": "general_qa"},
+                "data": {"chunk": Chunk([{"text": "hi"}])},
+            }
         )
     )
     assert events == [TokenEvent(content="hi")]
+
+
+def test_stream_events_from_graph_event_hides_router_model_output():
+    event = {
+        "event": "on_chat_model_stream",
+        "metadata": {"langgraph_node": "classify_intent"},
+        "data": {"chunk": Chunk("general_qa")},
+    }
+
+    assert list(stream_events_from_graph_event(event)) == []
 
 
 def test_stream_events_from_graph_event_ignores_unknown_events():

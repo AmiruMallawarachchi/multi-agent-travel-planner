@@ -15,6 +15,7 @@ NODE_ACTIVITY = {
     "flight": ActivityState.SEARCHING.value,
     "clarify": ActivityState.CLARIFYING.value,
 }
+RESPONSE_NODES = frozenset(NODE_ACTIVITY) - {"classify_intent"}
 
 
 def encode_sse(event: StreamEvent) -> str:
@@ -62,6 +63,9 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
         return
 
     if kind == "on_chat_model_stream":
+        graph_node = event.get("metadata", {}).get("langgraph_node")
+        if graph_node is not None and graph_node not in RESPONSE_NODES:
+            return
         chunk = event["data"]["chunk"]
         content = chunk_text(getattr(chunk, "content", ""))
         if content:
