@@ -179,4 +179,108 @@ describe("TripWeaverApp", () => {
     expect(screen.getByText("Day 1 in Tokyo")).toBeInTheDocument()
     expect(screen.getByText("Food planning block in Tokyo")).toBeInTheDocument()
   })
+
+  it("opens help centre and registers a traveller account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes("/api/health")) {
+          return Response.json({ online: true, backend: "online", mcp_servers: {} })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Response.json({ detail: "Not signed in" }, { status: 401 })
+        }
+        if (url.includes("/api/auth/register")) {
+          return Response.json({
+            user: {
+              id: "user-1",
+              email: "maya@example.com",
+              name: "Maya",
+              created_at: "2026-07-14T10:00:00+00:00",
+            },
+          })
+        }
+        if (url.includes("/api/conversations")) {
+          return Response.json({ conversations: [] })
+        }
+        return sseResponse(['{"type":"done"}'])
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole("button", { name: "User menu" }))
+    await user.click(screen.getByText("Help centre"))
+    expect(screen.getByRole("dialog", { name: "Help centre" })).toBeInTheDocument()
+    await user.keyboard("{Escape}")
+
+    await user.click(screen.getByRole("button", { name: "User menu" }))
+    await user.click(screen.getByText("Create account"))
+    await user.type(screen.getByLabelText("Name"), "Maya")
+    await user.type(screen.getByLabelText("Email"), "maya@example.com")
+    await user.type(screen.getByLabelText("Password"), "correct horse")
+    await user.click(screen.getByRole("button", { name: "Create account" }))
+
+    expect(await screen.findByText("Account created")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/auth/register",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("loads account-backed conversation history for a signed-in traveller", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes("/api/health")) {
+          return Response.json({ online: true, backend: "online", mcp_servers: {} })
+        }
+        if (url.includes("/api/auth/me")) {
+          return Response.json({
+            id: "user-1",
+            email: "maya@example.com",
+            name: "Maya",
+            created_at: "2026-07-14T10:00:00+00:00",
+          })
+        }
+        if (url.includes("/api/conversations")) {
+          return Response.json({
+            conversations: [
+              {
+                id: "cloud-trip",
+                title: "Cloud Tokyo",
+                sessionId: "0123456789abcdef0123456789abcdef",
+                createdAt: "2026-07-14T10:00:00.000Z",
+                updatedAt: "2026-07-14T10:01:00.000Z",
+                tripContext: {
+                  destination: "Tokyo",
+                  dates: null,
+                  travelers: null,
+                  budget: null,
+                  preferences: [],
+                },
+                messages: [
+                  {
+                    id: "m1",
+                    role: "user",
+                    content: "Plan Tokyo",
+                    createdAt: "2026-07-14T10:00:00.000Z",
+                  },
+                ],
+              },
+            ],
+          })
+        }
+        return sseResponse(['{"type":"done"}'])
+      }),
+    )
+
+    renderApp()
+
+    expect(await screen.findByRole("button", { name: /Cloud Tokyo/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
+  })
 })

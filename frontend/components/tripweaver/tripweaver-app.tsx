@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/components/tripweaver/app-header"
+import { AuthDialog, type AuthMode } from "@/components/tripweaver/auth-dialog"
 import { ChatWorkspace } from "@/components/tripweaver/chat-workspace"
 import { ConversationSidebar } from "@/components/tripweaver/conversation-sidebar"
+import { HelpCenterDialog } from "@/components/tripweaver/help-center-dialog"
 import { SettingsDialog } from "@/components/tripweaver/settings-dialog"
 import { StatusPanel } from "@/components/tripweaver/status-panel"
 import {
@@ -32,6 +34,7 @@ import {
 import { extractTripContext } from "@/features/tripweaver/trip-context"
 import type {
   Attachment,
+  AccountUser,
   ChatMessage,
   Conversation,
   RuntimeState,
@@ -127,6 +130,9 @@ export function TripWeaverApp() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null)
+  const [account, setAccount] = useState<AccountUser | null>(null)
   const hydratedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
@@ -152,6 +158,10 @@ export function TripWeaverApp() {
   }, [])
 
   useEffect(() => {
+    void refreshAccount()
+  }, [])
+
+  useEffect(() => {
     if (!hydratedRef.current) return
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
     if (settings.autoSave) {
@@ -160,6 +170,16 @@ export function TripWeaverApp() {
       window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY)
     }
   }, [settings, state.conversations])
+
+  useEffect(() => {
+    if (!hydratedRef.current || !account) return
+    const timeout = window.setTimeout(() => {
+      state.conversations
+        .filter(hasUserMessage)
+        .forEach((conversation) => void saveAccountConversation(conversation))
+    }, 500)
+    return () => window.clearTimeout(timeout)
+  }, [account, state.conversations])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -222,6 +242,9 @@ export function TripWeaverApp() {
     abortRef.current?.abort()
     const conversation = createConversation()
     window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY)
+    if (account) {
+      void fetch("/api/conversations", { method: "DELETE" })
+    }
     setState((current) => ({
       conversations: [conversation],
       activeConversationId: conversation.id,
@@ -231,6 +254,75 @@ export function TripWeaverApp() {
     setAttachments([])
     setQuery("")
     setIsStreaming(false)
+  }
+
+  async function refreshAccount() {
+    try {
+      const response = await fetch("/api/auth/me", { cache: "no-store" })
+      if (!response.ok) return
+      const user = (await response.json()) as AccountUser
+      setAccount(user)
+      await loadAccountConversations()
+    } catch {
+      setAccount(null)
+    }
+  }
+
+  async function loadAccountConversations() {
+    const response = await fetch("/api/conversations", { cache: "no-store" })
+    if (!response.ok) return
+    const data = (await response.json()) as { conversations?: unknown[] }
+    const cloud = parseStoredConversations(JSON.stringify(data.conversations ?? []))
+    if (cloud.length === 0) return
+    setState((current) => ({
+      ...current,
+      conversations: cloud,
+      activeConversationId: cloud[0].id,
+      runtime: resetRuntimeState(current.runtime),
+    }))
+  }
+
+  async function saveAccountConversation(conversation: Conversation) {
+    try {
+      await fetch("/api/conversations", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation }),
+      })
+    } catch {
+      // A failed background sync should not interrupt trip planning.
+    }
+  }
+
+  async function authenticate(
+    mode: AuthMode,
+    payload: { email: string; password: string; name?: string },
+  ) {
+    const response = await fetch(`/api/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    const body = (await response.json()) as { user?: AccountUser; detail?: string }
+    if (!response.ok || !body.user) {
+      throw new Error(body.detail ?? "Could not authenticate")
+    }
+    setAccount(body.user)
+    setAuthMode(null)
+    toast.success(mode === "register" ? "Account created" : "Signed in")
+    await loadAccountConversations()
+  }
+
+  async function signOut() {
+    abortRef.current?.abort()
+    recognitionRef.current?.stop()
+    await fetch("/api/auth/logout", { method: "POST" })
+    setAccount(null)
+    setState(createInitialState())
+    setInput("")
+    setAttachments([])
+    setIsStreaming(false)
+    toast.success("Signed out")
   }
 
   function selectConversation(conversationId: string) {
@@ -441,9 +533,13 @@ export function TripWeaverApp() {
     <main className="h-svh min-h-[560px] bg-muted xl:p-4">
       <div className="mx-auto grid h-full max-w-[1600px] grid-rows-[68px_minmax(0,1fr)] overflow-hidden border bg-background shadow-sm xl:h-[calc(100svh-2rem)] xl:rounded-lg">
         <AppHeader
+          account={account}
           backendOnline={state.runtime.backendOnline}
+          onOpenAuth={setAuthMode}
+          onOpenHelp={() => setHelpOpen(true)}
           onOpenHistory={() => setHistoryOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onSignOut={() => void signOut()}
         />
 
         <div className="grid min-h-0 grid-cols-1 md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_292px]">
@@ -497,6 +593,8 @@ export function TripWeaverApp() {
         onOpenChange={setSettingsOpen}
         onSettingsChange={setSettings}
       />
+      <AuthDialog mode={authMode} onModeChange={setAuthMode} onSubmit={authenticate} />
+      <HelpCenterDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </main>
   )
 }

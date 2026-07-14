@@ -1,6 +1,6 @@
 "use client"
 
-import { CircleHelp, Clock3, LogOut, Settings2, Waypoints } from "lucide-react"
+import { CircleHelp, Clock3, LogIn, LogOut, Settings2, UserPlus, Waypoints } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -13,14 +13,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import type { AuthMode } from "@/components/tripweaver/auth-dialog"
+import type { AccountUser } from "@/features/tripweaver/types"
 
 interface AppHeaderProps {
+  account: AccountUser | null
   backendOnline: boolean
+  onOpenAuth: (mode: AuthMode) => void
+  onOpenHelp: () => void
   onOpenHistory: () => void
   onOpenSettings: () => void
+  onSignOut: () => void
 }
 
-export function AppHeader({ backendOnline, onOpenHistory, onOpenSettings }: AppHeaderProps) {
+function initials(account: AccountUser | null) {
+  if (!account) return "U"
+  return account.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || account.email[0]?.toUpperCase() || "U"
+}
+
+export function AppHeader({
+  account,
+  backendOnline,
+  onOpenAuth,
+  onOpenHelp,
+  onOpenHistory,
+  onOpenSettings,
+  onSignOut,
+}: AppHeaderProps) {
   return (
     <header className="grid h-[68px] grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-background px-3 md:grid-cols-[248px_minmax(0,1fr)_auto] md:px-0">
       <div className="flex min-w-0 items-center gap-3 md:px-4">
@@ -68,30 +92,53 @@ export function AppHeader({ backendOnline, onOpenHistory, onOpenSettings }: AppH
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-10 gap-2 px-2" aria-label="User menu">
               <Avatar size="sm">
-                <AvatarFallback className="bg-[#e8f1ef] text-[#153e3a]">U</AvatarFallback>
+                <AvatarFallback className="bg-accent text-accent-foreground">
+                  {initials(account)}
+                </AvatarFallback>
               </Avatar>
-              <span className="hidden lg:inline">User</span>
+              <span className="hidden lg:inline">{account ? account.name : "User"}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel>
-              <span className="block text-sm font-medium">Traveller</span>
-              <span className="block text-xs font-normal text-muted-foreground">Local profile</span>
+              <span className="block truncate text-sm font-medium">
+                {account ? account.name : "Traveller"}
+              </span>
+              <span className="block truncate text-xs font-normal text-muted-foreground">
+                {account ? account.email : "Guest profile"}
+              </span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {!account ? (
+              <>
+                <DropdownMenuItem onSelect={() => onOpenAuth("login")}>
+                  <LogIn />
+                  Sign in
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onOpenAuth("register")}>
+                  <UserPlus />
+                  Create account
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuItem onSelect={onOpenSettings}>
               <Settings2 />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem disabled>
+            <DropdownMenuItem onSelect={onOpenHelp}>
               <CircleHelp />
               Help centre
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <LogOut />
-              Sign out
-            </DropdownMenuItem>
+            {account ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onSignOut}>
+                  <LogOut />
+                  Sign out
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </nav>

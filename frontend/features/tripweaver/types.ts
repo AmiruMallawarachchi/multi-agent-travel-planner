@@ -91,3 +91,10 @@ export interface TripWeaverSettings {
   autoSave: boolean
   showToolActivity: boolean
 }
+
+export interface AccountUser {
+  id: string
+  email: string
+  name: string
+  created_at: string
+}
