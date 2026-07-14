@@ -530,8 +530,8 @@ export function TripWeaverApp() {
   )
 
   return (
-    <main className="h-svh min-h-[560px] bg-muted xl:p-4">
-      <div className="mx-auto grid h-full max-w-[1600px] grid-rows-[68px_minmax(0,1fr)] overflow-hidden border bg-background shadow-sm xl:h-[calc(100svh-2rem)] xl:rounded-lg">
+    <main className="tw-app-background h-svh min-h-[560px] overflow-hidden p-1.5 sm:p-2.5 lg:p-3 xl:p-4">
+      <div className="tw-app-shell mx-auto grid h-full max-w-[1720px] grid-rows-[64px_minmax(0,1fr)] gap-2 overflow-hidden rounded-[22px] p-2 sm:grid-rows-[70px_minmax(0,1fr)] sm:gap-3 sm:p-3">
         <AppHeader
           account={account}
           backendOnline={state.runtime.backendOnline}
@@ -542,8 +542,8 @@ export function TripWeaverApp() {
           onSignOut={() => void signOut()}
         />
 
-        <div className="grid min-h-0 grid-cols-1 md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_292px]">
-          <div className="hidden min-h-0 border-r md:block">{sidebar}</div>
+        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+          <div className="glass-panel hidden min-h-0 overflow-hidden rounded-[18px] lg:block">{sidebar}</div>
           <ChatWorkspace
             attachments={attachments}
             conversation={activeConversation}
@@ -561,14 +561,14 @@ export function TripWeaverApp() {
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
           />
-          <div className="hidden min-h-0 overflow-y-auto border-l bg-sidebar xl:block">
+          <div className="glass-panel hidden min-h-0 overflow-y-auto rounded-[18px] xl:block">
             {statusPanel}
           </div>
         </div>
       </div>
 
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent side="left" className="w-[min(90vw,320px)] gap-0 p-0">
+        <SheetContent side="left" className="w-[min(92vw,340px)] gap-0 overflow-hidden p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Conversation history</SheetTitle>
             <SheetDescription>Search and open saved TripWeaver conversations.</SheetDescription>
@@ -578,7 +578,7 @@ export function TripWeaverApp() {
       </Sheet>
 
       <Sheet open={statusOpen} onOpenChange={setStatusOpen}>
-        <SheetContent side="right" className="w-[min(92vw,340px)] gap-0 overflow-y-auto p-0">
+        <SheetContent side="right" className="w-[min(94vw,360px)] gap-0 overflow-y-auto p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Trip status</SheetTitle>
             <SheetDescription>Live tools, trip context, and quick actions.</SheetDescription>

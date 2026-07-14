@@ -80,12 +80,12 @@ function statusLabel(status: ToolActivity["status"]) {
 
 function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
   return (
-    <div className="mb-3 overflow-hidden rounded-md border bg-card text-card-foreground">
-      <div className="flex h-9 items-center gap-2 border-b px-3 text-xs font-semibold">
-        <Sparkles className="size-3.5 text-[#2f7d72]" aria-hidden="true" />
+    <div className="glass-divider mb-3 overflow-hidden border-l-2 border-primary/45 bg-accent/15 text-card-foreground">
+      <div className="glass-divider flex h-10 items-center gap-2 border-b px-3 text-xs font-semibold">
+        <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
         Tool activity
       </div>
-      <div className="divide-y px-3">
+      <div className="divide-y divide-border/60 px-3">
         {tools.map((tool) => (
           <div
             key={tool.id}
@@ -141,8 +141,8 @@ function MessageBubble({
     <article className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
       <div
         className={cn(
-          "mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border bg-background",
-          !isUser && "border-primary/30 bg-accent text-accent-foreground",
+          "glass-control mt-1 flex size-9 shrink-0 items-center justify-center rounded-full",
+          !isUser && "border-primary/30 bg-accent/80 text-accent-foreground",
         )}
         aria-hidden="true"
       >
@@ -153,8 +153,10 @@ function MessageBubble({
         {showToolActivity && message.tools?.length ? <ToolActivityPanel tools={message.tools} /> : null}
         <div
           className={cn(
-            "rounded-md border px-4 py-3 text-sm leading-6 shadow-xs",
-            isUser ? "bg-secondary text-secondary-foreground" : "bg-card text-card-foreground",
+            "glass-card rounded-2xl px-4 py-3.5 text-sm leading-6",
+            isUser
+              ? "border-primary/20 bg-secondary/80 text-secondary-foreground"
+              : "text-card-foreground",
           )}
         >
           {message.content ? (
@@ -176,11 +178,11 @@ function MessageBubble({
             : null}
 
           {message.attachments?.length ? (
-            <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+            <div className="glass-divider mt-3 flex flex-wrap gap-2 border-t pt-3">
               {message.attachments.map((attachment) => (
                 <span
                   key={attachment.id}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground ring-1 ring-border"
+                  className="glass-control inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground"
                 >
                   <FileText className="size-3.5" aria-hidden="true" />
                   {attachment.name}
@@ -190,7 +192,7 @@ function MessageBubble({
           ) : null}
 
           {!isUser && message.content ? (
-            <div className="mt-3 flex items-center gap-1 border-t pt-2">
+            <div className="glass-divider mt-3 flex items-center gap-1 border-t pt-2">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -210,7 +212,7 @@ function MessageBubble({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="ml-1"
+                  className="glass-control glass-interactive ml-1 rounded-xl"
                   onClick={() => onOpenItinerary(message, itineraryResult)}
                 >
                   <FileText aria-hidden="true" />
@@ -267,7 +269,11 @@ function ConversationExport({ conversation }: { conversation: Conversation }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-9 bg-background" aria-label="Export or share conversation">
+        <Button
+          variant="outline"
+          className="glass-control glass-interactive h-11 rounded-xl"
+          aria-label="Export or share conversation"
+        >
           <Share2 aria-hidden="true" />
           <span className="hidden sm:inline">Export / Share</span>
         </Button>
@@ -325,8 +331,8 @@ export function ChatWorkspace({
   }
 
   return (
-    <section className="grid min-h-0 min-w-0 grid-rows-[52px_minmax(0,1fr)_auto] bg-background">
-      <header className="flex min-w-0 items-center gap-3 border-b px-3 md:px-4">
+    <section className="glass-panel-strong grid min-h-0 min-w-0 grid-rows-[58px_minmax(0,1fr)_auto] overflow-hidden rounded-[18px]">
+      <header className="glass-divider flex min-w-0 items-center gap-3 border-b px-3 sm:px-4">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase text-muted-foreground">Conversation</p>
           <h1 className="truncate text-sm font-semibold">{conversation.title}</h1>
@@ -337,7 +343,7 @@ export function ChatWorkspace({
         <Button
           variant="outline"
           size="icon"
-          className="ml-auto xl:hidden"
+          className="glass-control glass-interactive ml-auto size-11 rounded-xl xl:hidden"
           onClick={onOpenStatus}
           aria-label="Open trip status"
         >
@@ -346,7 +352,7 @@ export function ChatWorkspace({
         <ConversationExport conversation={conversation} />
       </header>
 
-      <div className="min-h-0 overflow-y-auto px-3 py-5 md:px-6" aria-live="polite">
+      <div className="min-h-0 overscroll-contain overflow-y-auto px-3 py-5 sm:px-5 md:px-6" aria-live="polite">
         <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5">
           {conversation.messages.map((message) => (
             <MessageBubble
@@ -362,14 +368,14 @@ export function ChatWorkspace({
         </div>
       </div>
 
-      <div className="border-t bg-sidebar px-3 pb-2 pt-3 md:px-5">
+      <div className="glass-divider border-t bg-transparent px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
         <form className="mx-auto w-full max-w-[900px]" onSubmit={submit}>
           {attachments.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
               {attachments.map((attachment) => (
                 <span
                   key={attachment.id}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-background pl-2 pr-1 text-xs"
+                  className="glass-control inline-flex h-8 items-center gap-1.5 rounded-lg pl-2 pr-1 text-xs"
                 >
                   <FileText className="size-3.5 text-muted-foreground" aria-hidden="true" />
                   {attachment.name}
@@ -387,11 +393,11 @@ export function ChatWorkspace({
             </div>
           ) : null}
 
-          <div className="rounded-lg border bg-background p-2 shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
+          <div className="glass-panel-strong rounded-[20px] p-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
             <Textarea
               aria-label="Message TripWeaver"
               placeholder="Type your message..."
-              className="max-h-36 min-h-12 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0 dark:bg-transparent"
+              className="max-h-36 min-h-14 resize-none border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
               disabled={isStreaming}
               value={input}
               onChange={(event) => onInputChange(event.target.value)}
@@ -405,7 +411,14 @@ export function ChatWorkspace({
             <div className="flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="Attach file" asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="glass-interactive size-11 rounded-xl"
+                    aria-label="Attach file"
+                    asChild
+                  >
                     <label>
                       <Paperclip aria-hidden="true" />
                       <input
@@ -430,7 +443,10 @@ export function ChatWorkspace({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className={cn(isListening && "bg-rose-50 text-rose-700")}
+                    className={cn(
+                      "glass-interactive size-11 rounded-xl",
+                      isListening && "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+                    )}
                     onClick={onStartVoice}
                     aria-label="Voice input"
                   >
@@ -447,7 +463,7 @@ export function ChatWorkspace({
               <Button
                 type="submit"
                 size="icon-lg"
-                className="ml-auto rounded-full bg-[#153e3a] hover:bg-[#205c55]"
+                className="glass-interactive ml-auto size-11 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90"
                 disabled={(!input.trim() && attachments.length === 0) || isStreaming}
                 aria-label="Send message"
               >
@@ -460,7 +476,7 @@ export function ChatWorkspace({
             </div>
           </div>
         </form>
-        <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+        <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
           Travel availability and prices can change. Verify important details before booking.
         </p>
       </div>
@@ -469,7 +485,7 @@ export function ChatWorkspace({
         open={Boolean(itinerarySelection)}
         onOpenChange={(open) => !open && setItinerarySelection(null)}
       >
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-lg">
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto rounded-[20px]">
           <DialogHeader>
             <DialogTitle>
               {itinerarySelection?.result

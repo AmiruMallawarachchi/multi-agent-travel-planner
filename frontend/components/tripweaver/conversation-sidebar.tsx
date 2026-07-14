@@ -51,11 +51,11 @@ export function ConversationSidebar({
   const groups = groupConversations(filtered)
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground", className)}>
-      <div className="space-y-3 border-b p-3">
+    <div className={cn("flex h-full min-h-0 flex-col text-sidebar-foreground", className)}>
+      <div className="glass-divider space-y-3 border-b p-3.5">
         <Button
           variant="outline"
-          className="h-10 w-full justify-center bg-background shadow-xs"
+          className="glass-control glass-interactive h-11 w-full justify-center rounded-xl font-semibold"
           onClick={onNewChat}
           aria-label="New chat"
         >
@@ -72,18 +72,18 @@ export function ConversationSidebar({
             type="search"
             aria-label="Search conversations"
             placeholder="Search conversations"
-            className="h-9 bg-background pl-8"
+            className="glass-control h-11 rounded-xl pl-9 shadow-none"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
         </label>
       </div>
 
-      <div className="px-3 pb-2 pt-4">
+      <div className="px-4 pb-2 pt-5">
         <h2 className="text-xs font-semibold uppercase text-muted-foreground">Recent chats</h2>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 px-2">
+      <ScrollArea className="min-h-0 flex-1 px-2.5">
         {groups.length > 0 ? (
           <div className="space-y-4 pb-4">
             {groups.map((group) => (
@@ -103,9 +103,9 @@ export function ConversationSidebar({
                       aria-current={conversation.id === activeConversationId ? "page" : undefined}
                       onClick={() => onSelect(conversation.id)}
                       className={cn(
-                        "grid w-full grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        "glass-interactive grid min-h-12 w-full grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-xl border border-transparent px-2.5 py-2.5 text-left hover:border-sidebar-border hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground",
                         conversation.id === activeConversationId &&
-                          "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
+                          "border-sidebar-border bg-sidebar-accent/80 text-sidebar-accent-foreground shadow-sm hover:bg-sidebar-accent/80",
                       )}
                     >
                       <MessageSquare className="mt-0.5 size-4 text-muted-foreground" aria-hidden="true" />
@@ -128,12 +128,12 @@ export function ConversationSidebar({
         )}
       </ScrollArea>
 
-      <div className="border-t p-3">
+      <div className="glass-divider border-t p-3">
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="ghost"
-              className="h-9 w-full justify-between px-2 text-muted-foreground"
+              className="glass-interactive h-11 w-full justify-between rounded-xl px-2.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               aria-label="Clear conversations"
               disabled={history.length === 0}
             >

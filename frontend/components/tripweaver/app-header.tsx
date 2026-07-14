@@ -1,6 +1,7 @@
 "use client"
 
-import { CircleHelp, Clock3, LogIn, LogOut, Settings2, UserPlus, Waypoints } from "lucide-react"
+import Image from "next/image"
+import { CircleHelp, Clock3, LogIn, LogOut, Settings2, UserPlus } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -46,19 +47,34 @@ export function AppHeader({
   onSignOut,
 }: AppHeaderProps) {
   return (
-    <header className="grid h-[68px] grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-background px-3 md:grid-cols-[248px_minmax(0,1fr)_auto] md:px-0">
-      <div className="flex min-w-0 items-center gap-3 md:px-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[#153e3a] text-white shadow-sm">
-          <Waypoints className="size-[18px]" aria-hidden="true" />
+    <header className="glass-panel glass-divider relative z-30 grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center rounded-[18px] px-2 sm:h-[70px] sm:px-3 md:grid-cols-[270px_minmax(0,1fr)_auto]">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="glass-control flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
+          <Image
+            src="/brand/tripweaver-mark.jpg"
+            alt=""
+            width={44}
+            height={44}
+            priority
+            className="brand-art size-10 object-contain"
+          />
         </div>
-        <span className="truncate text-base font-semibold">TripWeaver</span>
+        <Image
+          src="/brand/tripweaver-wordmark.jpg"
+          alt=""
+          width={132}
+          height={60}
+          priority
+          className="brand-art h-10 w-[104px] object-contain sm:w-[124px]"
+        />
+        <span className="sr-only">TripWeaver</span>
       </div>
 
       <div className="hidden min-w-0 items-center justify-center gap-3 md:flex">
-        <p className="truncate text-sm font-semibold">AI Trip Planning Assistant</p>
+        <p className="truncate text-sm font-semibold text-foreground/90">AI Trip Planning Assistant</p>
         <Badge
           variant="outline"
-          className="h-6 rounded-full px-2 font-normal text-muted-foreground"
+          className="glass-control h-7 rounded-full px-2.5 font-normal text-muted-foreground"
         >
           <span
             className={`size-1.5 rounded-full ${backendOnline ? "bg-emerald-600" : "bg-rose-500"}`}
@@ -68,38 +84,42 @@ export function AppHeader({
         </Badge>
       </div>
 
-      <nav className="flex items-center justify-end gap-0.5 pr-0 md:pr-3" aria-label="Application">
+      <nav className="flex items-center justify-end gap-1" aria-label="Application">
         <Button
           variant="ghost"
-          className="h-9 px-2.5"
+          size="icon"
+          className="glass-interactive size-11 rounded-xl hover:bg-accent/60"
           onClick={onOpenHistory}
           aria-label="History"
         >
           <Clock3 aria-hidden="true" />
-          <span className="hidden lg:inline">History</span>
         </Button>
         <Button
           variant="ghost"
-          className="h-9 px-2.5"
+          size="icon"
+          className="glass-interactive hidden size-11 rounded-xl hover:bg-accent/60 sm:inline-flex"
           onClick={onOpenSettings}
           aria-label="Settings"
         >
           <Settings2 aria-hidden="true" />
-          <span className="hidden lg:inline">Settings</span>
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-10 gap-2 px-2" aria-label="User menu">
+            <Button
+              variant="ghost"
+              className="glass-interactive h-11 gap-2 rounded-xl px-1.5 hover:bg-accent/60 sm:px-2"
+              aria-label="User menu"
+            >
               <Avatar size="sm">
-                <AvatarFallback className="bg-accent text-accent-foreground">
+                <AvatarFallback className="glass-control text-accent-foreground">
                   {initials(account)}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden lg:inline">{account ? account.name : "User"}</span>
+              <span className="hidden xl:inline">{account ? account.name : "User"}</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <span className="block truncate text-sm font-medium">
                 {account ? account.name : "Traveller"}

@@ -59,7 +59,7 @@ function ResultHeading({ result }: { result: StructuredResult }) {
 function FlightPreview({ data }: { data: unknown }) {
   const options = records(data).slice(0, 3)
   return (
-    <div className="divide-y">
+    <div className="divide-y divide-border/60">
       {options.map((option, index) => {
         const departure = record(option.departure)
         const arrival = record(option.arrival)
@@ -87,7 +87,7 @@ function FlightPreview({ data }: { data: unknown }) {
 function HotelPreview({ data }: { data: unknown }) {
   const options = records(data).slice(0, 3)
   return (
-    <div className="divide-y">
+    <div className="divide-y divide-border/60">
       {options.map((option, index) => (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2" key={`${text(option.name)}-${index}`}>
           <div className="min-w-0">
@@ -156,7 +156,7 @@ function WeatherPreview({ data }: { data: unknown }) {
         ) : null}
       </div>
       {daily.length ? (
-        <div className="mt-2 grid grid-cols-3 divide-x border-t pt-2 text-center text-[11px]">
+        <div className="glass-divider mt-2 grid grid-cols-3 divide-x divide-border/60 border-t pt-2 text-center text-xs">
           {daily.map((day) => (
             <div className="min-w-0 px-2" key={text(day.date)}>
               <p className="truncate font-medium">{text(day.date)}</p>
@@ -196,7 +196,7 @@ function CurrencyPreview({ data }: { data: unknown }) {
 function LocationPreview({ data }: { data: unknown }) {
   const places = records(data).slice(0, 3)
   return (
-    <div className="divide-y">
+    <div className="divide-y divide-border/60">
       {places.map((place, index) => (
         <div className="py-2" key={`${text(place.name)}-${index}`}>
           <div className="flex items-start justify-between gap-3">
@@ -220,7 +220,7 @@ function LocationPreview({ data }: { data: unknown }) {
 
 export function StructuredResultPreview({ result }: { result: StructuredResult }) {
   return (
-    <section className="border-t pt-3" aria-label={`${result.type} result`}>
+    <section className="glass-divider border-t pt-3" aria-label={`${result.type} result`}>
       <ResultHeading result={result} />
       {result.type === "flight" ? <FlightPreview data={result.data} /> : null}
       {result.type === "hotel" ? <HotelPreview data={result.data} /> : null}
@@ -242,7 +242,7 @@ export function ItineraryDetails({ data }: { data: unknown }) {
 
   return (
     <div className="space-y-5">
-      <dl className="grid grid-cols-2 gap-3 border-y py-3 text-sm sm:grid-cols-4">
+      <dl className="glass-divider grid grid-cols-2 gap-3 border-y py-3 text-sm sm:grid-cols-4">
         <div>
           <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CalendarDays className="size-3.5" aria-hidden="true" /> Dates
@@ -267,7 +267,7 @@ export function ItineraryDetails({ data }: { data: unknown }) {
         </div>
       </dl>
 
-      <div className="divide-y">
+      <div className="divide-y divide-border/60">
         {days.map((day, index) => (
           <section className="py-4 first:pt-0" key={text(day.date, String(index))}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -290,7 +290,7 @@ export function ItineraryDetails({ data }: { data: unknown }) {
       </div>
 
       {itinerary?.disclaimer ? (
-        <p className="border-t pt-3 text-xs text-muted-foreground">{text(itinerary.disclaimer)}</p>
+        <p className="glass-divider border-t pt-3 text-xs text-muted-foreground">{text(itinerary.disclaimer)}</p>
       ) : null}
     </div>
   )
