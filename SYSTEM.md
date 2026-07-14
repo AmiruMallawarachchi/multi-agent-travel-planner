@@ -85,7 +85,7 @@ Tailwind CSS, shadcn/ui, Radix primitives, and Lucide icons.
 
 Responsibilities:
 
-- maintain browser-local conversations and user settings
+- maintain guest browser conversations, signed-in account history, and user settings
 - proxy chat and health calls from server routes so credentials stay server-side
 - parse backend SSE into deterministic reducer state
 - show agent and tool lifecycle status
@@ -94,12 +94,14 @@ Responsibilities:
 - provide quick actions, export/share, attachments, and optional speech input
 - adapt history and status panels to sheets on small screens
 
-`frontend/app/api/chat/route.ts` is the credential boundary. It reads
-`BACKEND_API_KEY` on the Next.js server and sends `X-API-Key` to FastAPI. The
-browser bundle never receives that value.
+`frontend/app/api/chat/route.ts` and the account proxy routes under
+`frontend/app/api/auth` are credential boundaries. They read `BACKEND_API_KEY`
+on the Next.js server and send `X-API-Key` to FastAPI. Account sessions are
+stored as httpOnly cookies and forwarded to the backend as bearer tokens. The
+browser bundle never receives backend API keys or account session tokens.
 
-Conversation persistence is currently browser-local. Clearing browser storage
-or using another device does not preserve history.
+Guest conversation persistence is browser-local. Signed-in travellers use
+backend account history and can reload their conversations from the server.
 
 ### 3.2 FastAPI HTTP layer
 
@@ -109,6 +111,13 @@ The backend exposes:
 | --- | --- |
 | `GET /health` | Backend state plus reachability of all six MCP health endpoints |
 | `POST /session` | Generate a validated conversation session ID |
+| `POST /auth/register` | Create an account and issue an opaque account token |
+| `POST /auth/login` | Authenticate and issue an opaque account token |
+| `POST /auth/logout` | Revoke the current account token |
+| `GET /auth/me` | Return the signed-in traveller profile |
+| `GET /conversations` | List signed-in traveller conversations |
+| `PUT /conversations/{id}` | Save one signed-in traveller conversation |
+| `DELETE /conversations` | Clear signed-in traveller conversations |
 | `POST /chat/stream` | Run one graph turn and stream normalized SSE events |
 | `GET /docs` | OpenAPI documentation |
 
@@ -285,6 +294,8 @@ confirmation.
 ### HTTP controls
 
 - optional API-key authentication for local development, required in production
+- account passwords hashed with PBKDF2-SHA256 and per-user history isolation
+- opaque account tokens stored server-side and sent through httpOnly cookies
 - CORS allow-list
 - message length validation and sanitization
 - session ID validation
@@ -322,6 +333,7 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `CURRENCY_MCP_URL` | Currency MCP `/mcp` URL |
 | `LOCATION_MCP_URL` | Location MCP `/mcp` URL |
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
+| `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins |
 | `RATE_LIMIT_REQUESTS` | Requests allowed per local window |
 | `RATE_LIMIT_WINDOW_SECONDS` | Local rate-limit window |
@@ -392,8 +404,9 @@ Required release checks are documented in [README.md](./README.md).
 5. Itineraries are limited to 21 days and do not optimize routes or travel time.
 6. A turn routes to one specialist; a combined flight/hotel/weather itinerary
    orchestration node is not implemented.
-7. Conversation memory, rate limiting, and circuit state are process-local.
-8. The frontend has no account-backed cross-device history.
+7. LangGraph memory, rate limiting, and circuit state are process-local.
+8. Account history uses local SQLite by default; managed Postgres is recommended
+   before multi-instance production deploys.
 9. Booking is simulated and intentionally cannot transact.
 10. Python dependencies use bounded minimum ranges rather than a committed lock
     artifact. Production deployments should use reviewed exact locks.
@@ -406,7 +419,8 @@ Recommended next production steps:
 2. Add CI gates for Python/frontend tests, lint, type checks, builds, and secret
    scanning.
 3. Add OpenTelemetry traces and metrics around graph, LLM, MCP, and provider calls.
-4. Add account authentication and server-side conversation persistence.
+4. Move account history and graph memory to managed Postgres, and rate limiting
+   to Redis.
 5. Pin and automate dependency updates with reproducible lock artifacts.
 6. Add a deliberate multi-capability planning workflow with bounded parallelism.
 

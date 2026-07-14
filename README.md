@@ -65,9 +65,10 @@ OpenAI. The browser receives no OpenAI, SerpApi, or backend API secrets.
 | Location | `resolve_location`, `search_places` | Open-Meteo and SerpApi Google Maps |
 
 The frontend renders typed result views for flights, hotels, itineraries,
-weather, currency, and locations. It also includes conversation history,
-search, export/share, attachments, speech input where supported, trip context,
-quick actions, settings, responsive mobile sheets, and live service/tool state.
+weather, currency, and locations. It also includes guest conversation history,
+account-backed history for signed-in travellers, search, export/share,
+attachments, speech input where supported, trip context, quick actions,
+settings, responsive mobile sheets, and live service/tool state.
 
 ## Repository layout
 
@@ -75,7 +76,7 @@ quick actions, settings, responsive mobile sheets, and live service/tool state.
 backend/
   agents/                 LangGraph state, routing, prompts, specialists, MCP adapter
   api/                    FastAPI routes, schemas, and SSE normalization
-  core/                   authentication, validation, and rate limiting
+  core/                   auth, account storage, validation, and rate limiting
   tests/                  backend unit and contract tests
 frontend/
   app/                    Next.js routes and server-side API proxies
@@ -133,6 +134,8 @@ Set these private values:
   files.
 - A long random value in backend `TRIPWEAVER_API_KEYS` and the matching value
   in frontend `BACKEND_API_KEY` for authenticated local or production use.
+- Optional `TRIPWEAVER_DB_PATH` in `backend/.env` for account-backed history.
+  It defaults to a local SQLite file under `backend/data`.
 
 The itinerary, weather, and currency services do not require API keys. See
 [MCP_SETUP.md](./MCP_SETUP.md) for complete provider settings.
@@ -193,8 +196,9 @@ npm --prefix frontend run build
 
 ## Production boundaries
 
-- Conversation memory and rate limiting are in process. Use a shared
-  Redis/Postgres-backed implementation before horizontal scaling.
+- LangGraph memory and rate limiting are in process. Account history uses
+  SQLite for local/dev. Use managed Postgres plus Redis-backed rate limits
+  before horizontal scaling.
 - `book_hotel` and `book_flight` return explicit simulated confirmations.
 - Open-Meteo forecasts are limited to the provider's 16-day horizon.
 - The itinerary planner accepts trips up to 21 days and uses only supplied,

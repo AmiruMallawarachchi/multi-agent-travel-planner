@@ -6,7 +6,8 @@ conversation history, the streaming chat, and live tools/trip context.
 
 Implemented interactions include:
 
-- locally persisted conversation history, search, new chat, and clear history
+- guest browser history and account-backed history for signed-in travellers
+- conversation search, new chat, and clear history
 - export, copy, and Web Share support
 - text-file attachments and browser speech recognition when available
 - live agent/MCP status driven by backend SSE events
@@ -14,12 +15,13 @@ Implemented interactions include:
 - working flight, hotel, itinerary, weather, currency, and location quick actions
 - typed result views for all six travel capabilities
 - settings for persistence, tool activity, and light/dark appearance
+- login, registration, sign out, and help centre dialogs
 - responsive history and status sheets on smaller screens
 
-The browser never receives OpenAI, SerpApi, or backend API credentials.
-`BACKEND_API_KEY` is read only by the Next.js server route at `/api/chat`.
-`/api/health` performs a real backend health check so the UI does not show a
-fabricated online state.
+The browser never receives OpenAI, SerpApi, backend API credentials, or account
+session tokens. `BACKEND_API_KEY` is read only by Next.js server routes, and
+account sessions are stored as httpOnly cookies. `/api/health` performs a real
+backend health check so the UI does not show a fabricated online state.
 
 ## Local dev
 
