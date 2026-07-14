@@ -123,10 +123,13 @@ def _health_url(mcp_url: str) -> str:
     return f"{base_url}/health"
 
 
-async def _probe_server(_server: ServerName, mcp_url: str) -> bool:
+async def _probe_server(
+    _server: ServerName,
+    mcp_url: str,
+    client: httpx.AsyncClient,
+) -> bool:
     try:
-        async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT) as client:
-            response = await client.get(_health_url(mcp_url))
+        response = await client.get(_health_url(mcp_url))
         if response.status_code >= 400:
             return False
         payload = response.json()
@@ -138,10 +141,14 @@ async def _probe_server(_server: ServerName, mcp_url: str) -> bool:
 async def get_server_statuses() -> dict[ServerName, ServerStatus]:
     """Probe each MCP process without exposing internal service URLs."""
     servers = list(MCP_SERVER_URLS)
-    probes = await asyncio.gather(
-        *(_probe_server(server, MCP_SERVER_URLS[server]) for server in servers),
-        return_exceptions=True,
-    )
+    async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT, trust_env=False) as client:
+        probes = await asyncio.gather(
+            *(
+                _probe_server(server, MCP_SERVER_URLS[server], client)
+                for server in servers
+            ),
+            return_exceptions=True,
+        )
     return {
         server: cast(
             ServerStatus,

@@ -42,13 +42,34 @@ async def test_tools_are_connection_backed_and_scoped_to_one_server(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_health_statuses_are_normalized_without_exposing_urls(monkeypatch):
-    async def probe(server, _url):
+    class SharedClient:
+        instances = 0
+
+        def __init__(self, *, timeout, trust_env):
+            SharedClient.instances += 1
+            assert timeout is mcp_client.HEALTH_TIMEOUT
+            assert trust_env is False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, _exc_type, _exc, _traceback):
+            return None
+
+    clients = []
+
+    async def probe(server, _url, client):
+        clients.append(client)
         return server not in {"weather-mcp", "location-mcp"}
 
+    monkeypatch.setattr(mcp_client.httpx, "AsyncClient", SharedClient)
     monkeypatch.setattr(mcp_client, "_probe_server", AsyncMock(side_effect=probe))
 
     statuses = await mcp_client.get_server_statuses()
 
+    assert SharedClient.instances == 1
+    assert len(clients) == len(EXPECTED_SERVERS)
+    assert all(client is clients[0] for client in clients)
     assert statuses["hotel-mcp"] == "available"
     assert statuses["weather-mcp"] == "unavailable"
     assert statuses["location-mcp"] == "unavailable"
