@@ -1,7 +1,7 @@
 """
 agents/nodes.py
-Node functions for the LangGraph workflow: intent classification, the three
-specialist agents, and a clarification node.
+Node functions for the LangGraph workflow: intent classification, specialist
+agents, and a clarification node.
 
 Security note (defend this in the viva - SRS section 11):
 An MCP tool result is UNTRUSTED, third-party data. It could - accidentally

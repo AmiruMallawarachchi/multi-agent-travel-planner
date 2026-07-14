@@ -1,10 +1,9 @@
 version: "3.9"
 
 # Local dev only - each service also has its own Dockerfile + railway.json
-# for independent production deployment (SRS 9: "MCP servers run as their
-# own processes"). `docker compose up` wires the four together with the
-# same env vars the deployed system uses, just pointed at each other by
-# service name instead of public URLs.
+# for independent production deployment. `docker compose up` wires all eight
+# processes together with the same environment contract used in production,
+# using service names instead of public URLs.
 
 services:
   hotel-mcp:

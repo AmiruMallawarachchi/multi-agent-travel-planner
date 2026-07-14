@@ -11,7 +11,8 @@ Implemented interactions include:
 - text-file attachments and browser speech recognition when available
 - live agent/MCP status driven by backend SSE events
 - trip-context extraction for destination, dates, travellers, budget, and preferences
-- working flight/hotel quick actions, with future MCP actions clearly unavailable
+- working flight, hotel, itinerary, weather, currency, and location quick actions
+- typed result views for all six travel capabilities
 - settings for persistence, tool activity, and light/dark appearance
 - responsive history and status sheets on smaller screens
 
@@ -41,8 +42,8 @@ npm audit
 ```
 
 Vitest covers the API proxy, health reporting, conversation helpers, trip
-context extraction, SSE-to-tool-state handling, and user-facing workspace
-interactions.
+context extraction, SSE-to-tool-state handling, structured result rendering,
+and user-facing workspace interactions.
 
 ## Environment
 

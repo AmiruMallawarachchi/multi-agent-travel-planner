@@ -1,165 +1,266 @@
 # MCP server setup
 
-How to run and deploy TripWeaver's hotel and flight MCP servers with
-SerpApi-backed Google Hotels and Google Flights search.
+TripWeaver runs each travel capability as an independent FastMCP HTTP service.
+The backend discovers tools through `/mcp` and probes service health through
+`/health`.
 
-## 1. Services and tools
+## Service map
 
-The MCP servers are independent `fastmcp` processes. They keep the existing
-tool names and streamable HTTP `/mcp` endpoints so the backend integration does
-not change.
+| Service | Port | Tools | External provider |
+| --- | ---: | --- | --- |
+| `hotel-mcp` | 8001 | `list_hotels`, `search_hotels`, `book_hotel` | SerpApi Google Hotels |
+| `flight-mcp` | 8002 | `list_flights`, `search_flights`, `book_flight` | SerpApi Google Flights |
+| `itinerary-mcp` | 8003 | `create_itinerary` | None |
+| `weather-mcp` | 8004 | `get_current_weather`, `get_weather_forecast` | Open-Meteo |
+| `currency-mcp` | 8005 | `convert_currency`, `get_exchange_rate`, `list_supported_currencies` | Frankfurter |
+| `location-mcp` | 8006 | `resolve_location`, `search_places` | Open-Meteo and SerpApi Google Maps |
 
-| Server | Tools | Local port |
-|---|---|---:|
-| `hotel-mcp` | `list_hotels`, `search_hotels`, `book_hotel` | 8001 |
-| `flight-mcp` | `list_flights`, `search_flights`, `book_flight` | 8002 |
+Every tool returns a dictionary with an `ok` boolean. Invalid input and provider
+failures are represented as controlled tool results instead of transport-level
+exceptions. The backend maps `ok: false` to a failed tool event.
 
-Searches use SerpApi. Bookings remain simulated and always include
-`"simulated": true`; TripWeaver does not perform real travel booking or payment.
+## SerpApi credentials
 
-## 2. Get a SerpApi key
+Hotel search, flight search, and local place search share one SerpApi key.
 
-1. Create or sign in to a SerpApi account at https://serpapi.com.
-2. Open https://serpapi.com/manage-api-key and copy your private API key.
-3. Use the same key for both MCP services.
-4. Never paste the key into chat, commit it, or expose it to the frontend.
+1. Create an account at https://serpapi.com/.
+2. Obtain a private API key from the account dashboard.
+3. Copy the three examples below to `.env`.
+4. Put the same key in all three files.
+5. Never commit the `.env` files or paste the key into source code.
 
-Create `mcp_servers/hotel_mcp/.env`:
+`mcp_servers/hotel_mcp/.env`:
 
 ```dotenv
-SERPAPI_API_KEY=your-private-serpapi-key
+SERPAPI_API_KEY=replace-with-your-private-key
 SERPAPI_BASE_URL=https://serpapi.com/search.json
 PORT=8001
 ```
 
-Create `mcp_servers/flight_mcp/.env`:
+`mcp_servers/flight_mcp/.env`:
 
 ```dotenv
-SERPAPI_API_KEY=your-private-serpapi-key
+SERPAPI_API_KEY=replace-with-your-private-key
 SERPAPI_BASE_URL=https://serpapi.com/search.json
 PORT=8002
 ```
 
-The `.env` files are ignored by Git. The committed `.env.example` files contain
-placeholders only.
+`mcp_servers/location_mcp/.env`:
 
-## 3. Flight search contract
+```dotenv
+SERPAPI_API_KEY=replace-with-your-private-key
+SERPAPI_BASE_URL=https://serpapi.com/search.json
+OPEN_METEO_GEOCODING_URL=https://geocoding-api.open-meteo.com/v1/search
+PORT=8006
+```
+
+Hotel and flight no longer use Amadeus OAuth. Do not add
+`AMADEUS_CLIENT_ID`, `AMADEUS_CLIENT_SECRET`, or `AMADEUS_BASE_URL`.
+
+The key is sent to SerpApi only as the `api_key` query parameter. Provider
+errors and logs are sanitized so the key is not included in application logs.
+
+## Keyless services
+
+The remaining services can use their committed example defaults:
+
+`mcp_servers/itinerary_mcp/.env.example`:
+
+```dotenv
+PORT=8003
+```
+
+`mcp_servers/weather_mcp/.env.example`:
+
+```dotenv
+OPEN_METEO_GEOCODING_URL=https://geocoding-api.open-meteo.com/v1/search
+OPEN_METEO_FORECAST_URL=https://api.open-meteo.com/v1/forecast
+PORT=8004
+```
+
+`mcp_servers/currency_mcp/.env.example`:
+
+```dotenv
+FRANKFURTER_BASE_URL=https://api.frankfurter.dev/v1
+PORT=8005
+```
+
+You only need private `.env` copies for these services when overriding a
+default URL or port.
+
+## Provider contracts
+
+### Flight MCP
 
 `search_flights` calls SerpApi with `engine=google_flights` and supports:
 
-Official parameters and response examples: https://serpapi.com/google-flights-api.
+- `departure_id` and `arrival_id` as three-letter IATA codes
+- `outbound_date` and optional `return_date` in `YYYY-MM-DD` format
+- `adults`, `children`, `travel_class`, `currency`, and optional `max_price`
 
-- `departure_id`, `arrival_id`: three-letter IATA airport codes
-- `outbound_date`: required `YYYY-MM-DD` date
-- `return_date`: optional; present means round trip
-- `adults`, `children`: maximum nine passengers in total
-- `travel_class`: `1` economy, `2` premium economy, `3` business, `4` first
-- `currency`: three-letter currency code such as `USD`
-- `max_price`: optional maximum ticket price
+The service sends `type=1` for round trips and `type=2` for one-way searches.
+It combines `best_flights` and `other_flights`, normalizes segments and
+layovers, and returns at most ten options. Travel classes use SerpApi values
+1 through 4: economy, premium economy, business, and first.
 
-The client sets `type=1` for a round trip and `type=2` for a one-way trip. It
-combines `best_flights` and `other_flights`, then returns at most ten normalized
-options. Every option includes its first airline/flight number, endpoint
-airports and times, all segments, layovers, total duration, price, currency,
-travel class, and `booking_token` when SerpApi supplies one.
-
-## 4. Hotel search contract
+### Hotel MCP
 
 `search_hotels` calls SerpApi with `engine=google_hotels` and supports:
 
-Official parameters and response examples: https://serpapi.com/google-hotels-api.
+- destination query, check-in date, and check-out date
+- adults, children, currency, optional minimum/maximum price, and rating
 
-- `destination`: a place or complete hotel query
-- `check_in_date`, `check_out_date`: required `YYYY-MM-DD` dates
-- `adults`, `children`: maximum ten guests in total
-- `currency`: three-letter currency code such as `USD`
-- `min_price`, `max_price`: optional nightly-price filters
-- `rating`: optional SerpApi filter `7` (3.5+), `8` (4.0+), or `9` (4.5+)
+It normalizes the `properties` array into name, description, nightly price,
+rating, review count, hotel class, amenities, image, coordinates, and property
+token. It returns at most ten properties.
 
-A plain destination such as `Dubai` becomes the query `Hotels in Dubai`; a
-complete query such as `Hotels near Dubai Marina` is preserved. The client reads
-`properties` and returns at most ten normalized records containing the name,
-description, nightly price, currency, rating, review count, hotel class,
-amenities, primary image, coordinates, and `property_token`.
+### Itinerary MCP
 
-## 5. Run locally
+`create_itinerary` validates destination, dates, travelers, interests, pace,
+budget, currency, and optional provider-backed activities. It creates a stable
+day-by-day structure for trips up to 21 days.
 
-Use one terminal per service:
+When no verified activities are supplied, it creates an honest planning
+framework instead of inventing place names. Extra activities are returned as
+unscheduled rather than silently dropped.
+
+### Weather MCP
+
+The weather service resolves a place with Open-Meteo geocoding and then calls
+the forecast API. It supports current conditions, daily forecasts, explicit
+date ranges, temperature/wind/precipitation units, and a maximum 16-day
+forecast horizon.
+
+### Currency MCP
+
+The currency service uses Frankfurter current or historical reference rates.
+Inputs are validated as ISO-style three-letter currency codes and monetary
+calculations use `Decimal` rounding. Same-currency conversion does not make a
+network request.
+
+Call `list_supported_currencies` before offering a currency in the UI when
+provider coverage matters. For example, Frankfurter may not publish LKR even
+though it publishes USD and EUR.
+
+### Location MCP
+
+`resolve_location` uses keyless Open-Meteo geocoding. `search_places` uses
+SerpApi `engine=google_maps`; it accepts a nearby place name or explicit
+latitude/longitude and returns normalized local results.
+
+## Local run
+
+Install dependencies from the repository root:
 
 ```powershell
-cd mcp_servers/hotel_mcp
-..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
-..\..\.venv\Scripts\python.exe server.py
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\hotel_mcp\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\flight_mcp\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\itinerary_mcp\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\weather_mcp\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\currency_mcp\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r mcp_servers\location_mcp\requirements.txt
 ```
+
+Start each server in its own terminal:
 
 ```powershell
-cd mcp_servers/flight_mcp
-..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
-..\..\.venv\Scripts\python.exe server.py
+.\.venv\Scripts\python.exe mcp_servers\hotel_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\flight_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\itinerary_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\weather_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\currency_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\location_mcp\server.py
 ```
 
-The existing backend configuration remains unchanged:
+Health endpoints:
+
+```text
+http://localhost:8001/health
+http://localhost:8002/health
+http://localhost:8003/health
+http://localhost:8004/health
+http://localhost:8005/health
+http://localhost:8006/health
+```
+
+MCP endpoints use the same hosts and ports with `/mcp`.
+
+## Backend registration
+
+`backend/.env` must point to each MCP endpoint:
 
 ```dotenv
 HOTEL_MCP_URL=http://localhost:8001/mcp
 FLIGHT_MCP_URL=http://localhost:8002/mcp
+ITINERARY_MCP_URL=http://localhost:8003/mcp
+WEATHER_MCP_URL=http://localhost:8004/mcp
+CURRENCY_MCP_URL=http://localhost:8005/mcp
+LOCATION_MCP_URL=http://localhost:8006/mcp
 ```
 
-You can also start all services with `docker compose up --build` after every
-service's local `.env` file is configured.
+`backend/agents/mcp_client.py` owns the service registry. Specialists request
+tools with `MultiServerMCPClient.get_tools(server_name=...)`; the resulting
+connection-backed tools open a fresh MCP session when invoked. Do not return
+tools loaded from a temporary session because they would remain bound to a
+closed stream.
 
-## 6. Verify without spending credits
+The current permissions are:
 
-The provider tests use `httpx.MockTransport`; they never contact SerpApi:
+| Agent | Allowed MCP services |
+| --- | --- |
+| Hotel | `hotel-mcp` |
+| Flight | `flight-mcp` |
+| Itinerary | `location-mcp`, `itinerary-mcp` |
+| Weather | `weather-mcp` |
+| Currency | `currency-mcp` |
+| Location | `location-mcp` |
+
+This is enforced by tool binding, not only by prompts.
+
+## Tests
+
+Provider HTTP tests use `httpx.MockTransport`. They validate request mapping,
+normalization, limits, timeouts, malformed inputs, empty result arrays, and
+secret redaction without consuming API credits.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q `
-  mcp_servers/flight_mcp/tests/test_serpapi_client.py `
-  mcp_servers/hotel_mcp/tests/test_hotel_serpapi_client.py
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\hotel_mcp\tests
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\flight_mcp\tests
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\itinerary_mcp\tests
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\weather_mcp\tests
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\currency_mcp\tests
+.\.venv\Scripts\python.exe -m pytest -q mcp_servers\location_mcp\tests
 ```
 
-To inspect the live MCP tool schema without making a provider request:
+Live provider calls are optional manual checks. They spend SerpApi credits and
+must not be part of CI.
 
-```powershell
-cd mcp_servers/flight_mcp
-..\..\.venv\Scripts\python.exe -c "import asyncio; from server import mcp; print([tool.name for tool in asyncio.run(mcp.list_tools())])"
-```
+## Deployment
 
-Only run a live search after confirming the dates and understanding that it may
-consume SerpApi account credits. Missing credentials and provider errors return
-structured `{ "ok": false, "error": "..." }` tool results rather than crashing
-the MCP process.
+Deploy each MCP directory as a separate Railway or container service:
 
-## 7. Backend discovery
+1. Select the MCP directory as the service root.
+2. Use its committed `Dockerfile` or `railway.json`.
+3. Add only that service's environment variables in the deployment secret
+   store.
+4. Confirm `/health` returns `{"status":"ok", ...}`.
+5. Put each public `/mcp` URL in the backend service variables.
+6. Set matching backend `TRIPWEAVER_API_KEYS` and frontend `BACKEND_API_KEY`.
 
-`backend/agents/mcp_client.py` reads `HOTEL_MCP_URL` and `FLIGHT_MCP_URL` and
-loads tools within a server-specific MCP session. The hotel agent cannot call
-flight tools, and the flight agent cannot call hotel tools, by construction.
+The MCP services do not expose the OpenAI key. Only the backend needs
+`OPENAI_API_KEY`.
 
-## 8. Railway deployment
+## Adding another MCP service
 
-Deploy each MCP directory as its own Railway service:
-
-1. Set the hotel service root to `mcp_servers/hotel_mcp`.
-2. Set `SERPAPI_API_KEY` and
-   `SERPAPI_BASE_URL=https://serpapi.com/search.json` in Railway Variables.
-3. Let Railway provide `PORT` automatically.
-4. Repeat with root `mcp_servers/flight_mcp` and the same SerpApi key.
-5. Put each public `/mcp` URL in the backend's `HOTEL_MCP_URL` and
-   `FLIGHT_MCP_URL` variables.
-
-Do not place `SERPAPI_API_KEY` in frontend variables or any variable beginning
-with `NEXT_PUBLIC_`.
-
-## 9. Adding another MCP server
-
-Keep each provider integration independently deployable:
-
-1. Add a new directory under `mcp_servers/` with its own `server.py`, provider
-   client, requirements, Dockerfile, Railway config, and `.env.example`.
-2. Register only that server's URL in `backend/agents/mcp_client.py`.
-3. Add a matching specialist prompt/node and one graph route.
-4. Mock the provider HTTP boundary in tests; never use live credits in CI.
-
-Do not give every agent a shared tool bag. Continue loading tools through the
-server-specific MCP session so provider capabilities remain isolated.
+1. Create a sibling directory with a provider client, `server.py`, tests,
+   `.env.example`, `Dockerfile`, and `railway.json`.
+2. Validate and normalize all provider data at the service boundary.
+3. Return `{"ok": false, "error": ...}` for expected failures and redact
+   credentials from errors and logs.
+4. Register the server name and URL in `backend/agents/mcp_client.py`.
+5. Bind it only to the intended specialist in `backend/agents/nodes.py`.
+6. Add intent routing and prompt changes only when the capability needs a new
+   agent.
+7. Map structured results in `backend/api/sse.py` and frontend stream types.
+8. Add health, backend contract, SSE, reducer, component, and provider tests.
+9. Add the service to Compose and deployment documentation.
