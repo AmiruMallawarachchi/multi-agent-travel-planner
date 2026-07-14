@@ -15,6 +15,7 @@ reserves travel.
 - [System architecture](./SYSTEM.md)
 - [MCP setup and provider contracts](./MCP_SETUP.md)
 - [Security model](./SECURITY.md)
+- [Production deployment](./DEPLOYMENT.md)
 - [Frontend guide](./frontend/README.md)
 
 ## Architecture
@@ -173,8 +174,9 @@ After the same `.env` files exist, start the complete topology with:
 docker compose up --build
 ```
 
-Each service also has its own `Dockerfile` and Railway configuration for
-independent deployment.
+Each service has its own `Dockerfile`. The single-VM production topology in
+[DEPLOYMENT.md](./DEPLOYMENT.md) keeps MCP services private, persists account
+history, and replaces the earlier Railway-oriented deployment path.
 
 ## Verification
 
