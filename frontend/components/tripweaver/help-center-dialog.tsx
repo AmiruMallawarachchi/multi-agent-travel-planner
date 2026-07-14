@@ -36,7 +36,7 @@ const HELP_ITEMS = [
 export function HelpCenterDialog({ open, onOpenChange }: HelpCenterDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-lg">
+      <DialogContent className="max-w-lg rounded-[20px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CircleHelp className="size-5" aria-hidden="true" />
@@ -47,10 +47,12 @@ export function HelpCenterDialog({ open, onOpenChange }: HelpCenterDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="divide-y rounded-md border">
+        <div className="glass-control divide-y divide-border/60 overflow-hidden rounded-2xl">
           {HELP_ITEMS.map(({ title, body, Icon }) => (
             <section key={title} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 p-3">
-              <Icon className="mt-0.5 size-4 text-muted-foreground" aria-hidden="true" />
+              <span className="glass-control flex size-8 items-center justify-center rounded-xl">
+                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+              </span>
               <div>
                 <h3 className="text-sm font-medium">{title}</h3>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{body}</p>

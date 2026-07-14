@@ -33,13 +33,13 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-lg" showCloseButton={false}>
+      <DialogContent className="max-w-md rounded-[20px]" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Control how this browser stores and presents your trips.</DialogDescription>
         </DialogHeader>
 
-        <div className="divide-y rounded-md border">
+        <div className="glass-control divide-y divide-border/60 overflow-hidden rounded-2xl">
           <label className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 p-3">
             <Save className="size-4 text-muted-foreground" aria-hidden="true" />
             <span>
@@ -84,7 +84,7 @@ export function SettingsDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button aria-label="Close settings">Done</Button>
+            <Button className="h-11 rounded-xl" aria-label="Close settings">Done</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>

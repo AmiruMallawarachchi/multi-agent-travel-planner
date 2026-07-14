@@ -57,7 +57,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
 
   return (
     <Dialog open={Boolean(mode)} onOpenChange={(open) => !open && onModeChange(null)}>
-      <DialogContent className="max-w-sm rounded-lg">
+      <DialogContent className="max-w-sm rounded-[20px]">
         <DialogHeader>
           <DialogTitle>{isRegister ? "Create your account" : "Sign in"}</DialogTitle>
           <DialogDescription>
@@ -65,7 +65,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-3" onSubmit={submit}>
+        <form className="space-y-4" onSubmit={submit}>
           {isRegister ? (
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-muted-foreground">Name</span>
@@ -74,6 +74,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Traveller"
+                className="glass-control h-11 rounded-xl"
               />
             </label>
           ) : null}
@@ -87,6 +88,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
+              className="glass-control h-11 rounded-xl"
             />
           </label>
 
@@ -100,12 +102,13 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder={isRegister ? "At least 8 characters" : "Your password"}
+              className="glass-control h-11 rounded-xl"
             />
           </label>
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          <Button className="w-full" type="submit" disabled={submitting}>
+          <Button className="h-11 w-full rounded-xl" type="submit" disabled={submitting}>
             {submitting ? (
               <LoaderCircle className="animate-spin" aria-hidden="true" />
             ) : isRegister ? (
@@ -120,7 +123,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
         <Button
           type="button"
           variant="ghost"
-          className="w-full"
+          className="glass-interactive h-11 w-full rounded-xl"
           onClick={() => onModeChange(isRegister ? "login" : "register")}
         >
           {isRegister ? "I already have an account" : "Create a new account"}
