@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { AppHeader } from "@/components/tripweaver/app-header"
@@ -140,6 +140,32 @@ export function TripWeaverApp() {
   const activeConversation =
     state.conversations.find(({ id }) => id === state.activeConversationId) ?? state.conversations[0]
 
+  const loadAccountConversations = useCallback(async () => {
+    const response = await fetch("/api/conversations", { cache: "no-store" })
+    if (!response.ok) return
+    const data = (await response.json()) as { conversations?: unknown[] }
+    const cloud = parseStoredConversations(JSON.stringify(data.conversations ?? []))
+    if (cloud.length === 0) return
+    setState((current) => ({
+      ...current,
+      conversations: cloud,
+      activeConversationId: cloud[0].id,
+      runtime: resetRuntimeState(current.runtime),
+    }))
+  }, [])
+
+  const refreshAccount = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/me", { cache: "no-store" })
+      if (!response.ok) return
+      const user = (await response.json()) as AccountUser
+      setAccount(user)
+      await loadAccountConversations()
+    } catch {
+      setAccount(null)
+    }
+  }, [loadAccountConversations])
+
   useEffect(() => {
     const stored = parseStoredConversations(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))
     setSettings(parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY)))
@@ -159,7 +185,7 @@ export function TripWeaverApp() {
 
   useEffect(() => {
     void refreshAccount()
-  }, [])
+  }, [refreshAccount])
 
   useEffect(() => {
     if (!hydratedRef.current) return
@@ -254,32 +280,6 @@ export function TripWeaverApp() {
     setAttachments([])
     setQuery("")
     setIsStreaming(false)
-  }
-
-  async function refreshAccount() {
-    try {
-      const response = await fetch("/api/auth/me", { cache: "no-store" })
-      if (!response.ok) return
-      const user = (await response.json()) as AccountUser
-      setAccount(user)
-      await loadAccountConversations()
-    } catch {
-      setAccount(null)
-    }
-  }
-
-  async function loadAccountConversations() {
-    const response = await fetch("/api/conversations", { cache: "no-store" })
-    if (!response.ok) return
-    const data = (await response.json()) as { conversations?: unknown[] }
-    const cloud = parseStoredConversations(JSON.stringify(data.conversations ?? []))
-    if (cloud.length === 0) return
-    setState((current) => ({
-      ...current,
-      conversations: cloud,
-      activeConversationId: cloud[0].id,
-      runtime: resetRuntimeState(current.runtime),
-    }))
   }
 
   async function saveAccountConversation(conversation: Conversation) {
