@@ -1,0 +1,153 @@
+name: tripweaver-production
+
+services:
+  hotel-mcp:
+    build:
+      context: ../../mcp_servers/hotel_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8001"
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:?Set SERPAPI_API_KEY in deploy/production/.env}
+      SERPAPI_BASE_URL: https://serpapi.com/search.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  flight-mcp:
+    build:
+      context: ../../mcp_servers/flight_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8002"
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:?Set SERPAPI_API_KEY in deploy/production/.env}
+      SERPAPI_BASE_URL: https://serpapi.com/search.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  itinerary-mcp:
+    build:
+      context: ../../mcp_servers/itinerary_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  weather-mcp:
+    build:
+      context: ../../mcp_servers/weather_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8004"
+      OPEN_METEO_GEOCODING_URL: https://geocoding-api.open-meteo.com/v1/search
+      OPEN_METEO_FORECAST_URL: https://api.open-meteo.com/v1/forecast
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  currency-mcp:
+    build:
+      context: ../../mcp_servers/currency_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8005"
+      FRANKFURTER_BASE_URL: https://api.frankfurter.app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  location-mcp:
+    build:
+      context: ../../mcp_servers/location_mcp
+    restart: unless-stopped
+    environment:
+      PORT: "8006"
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY:?Set SERPAPI_API_KEY in deploy/production/.env}
+      SERPAPI_BASE_URL: https://serpapi.com/search.json
+      OPEN_METEO_GEOCODING_URL: https://geocoding-api.open-meteo.com/v1/search
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+
+  backend:
+    build:
+      context: ../../backend
+    restart: unless-stopped
+    environment:
+      PORT: "8000"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in deploy/production/.env}
+      ROUTER_MODEL: ${ROUTER_MODEL:-gpt-4o-mini}
+      AGENT_MODEL: ${AGENT_MODEL:-gpt-4o-mini}
+      HOTEL_MCP_URL: http://hotel-mcp:8001/mcp
+      FLIGHT_MCP_URL: http://flight-mcp:8002/mcp
+      ITINERARY_MCP_URL: http://itinerary-mcp:8003/mcp
+      WEATHER_MCP_URL: http://weather-mcp:8004/mcp
+      CURRENCY_MCP_URL: http://currency-mcp:8005/mcp
+      LOCATION_MCP_URL: http://location-mcp:8006/mcp
+      TRIPWEAVER_API_KEYS: ${TRIPWEAVER_API_KEY:?Set TRIPWEAVER_API_KEY in deploy/production/.env}
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-20}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      MAX_MESSAGE_LENGTH: ${MAX_MESSAGE_LENGTH:-2000}
+      TRIPWEAVER_DB_PATH: /data/tripweaver.sqlite3
+    volumes:
+      - backend_data:/data
+    depends_on:
+      hotel-mcp: { condition: service_healthy }
+      flight-mcp: { condition: service_healthy }
+      itinerary-mcp: { condition: service_healthy }
+      weather-mcp: { condition: service_healthy }
+      currency-mcp: { condition: service_healthy }
+      location-mcp: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+
+  frontend:
+    build:
+      context: ../../frontend
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      BACKEND_URL: http://backend:8000
+      BACKEND_API_KEY: ${TRIPWEAVER_API_KEY:?Set TRIPWEAVER_API_KEY in deploy/production/.env}
+    depends_on:
+      backend: { condition: service_healthy }
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+volumes:
+  backend_data:
+  caddy_data:
+  caddy_config:
