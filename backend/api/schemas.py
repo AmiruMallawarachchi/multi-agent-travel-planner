@@ -22,6 +22,37 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=8, max_length=256)
+    name: str | None = Field(default=None, max_length=80)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    created_at: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+
+class ConversationSyncRequest(BaseModel):
+    conversation: dict[str, Any]
+
+
+class ConversationsResponse(BaseModel):
+    conversations: list[dict[str, Any]]
+
+
 class SessionEvent(BaseModel):
     type: Literal["session"] = "session"
     session_id: str

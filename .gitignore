@@ -25,3 +25,5 @@ next-env.d.ts
 
 # Logs
 *.log
+*.sqlite
+*.sqlite3

@@ -6,12 +6,23 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from agents.graph import graph
 from agents.mcp_client import get_server_statuses
-from api.schemas import ChatRequest, HealthResponse, SessionEvent, SessionResponse
+from api.schemas import (
+    AuthResponse,
+    ChatRequest,
+    ConversationSyncRequest,
+    ConversationsResponse,
+    HealthResponse,
+    LoginRequest,
+    RegisterRequest,
+    SessionEvent,
+    SessionResponse,
+    UserResponse,
+)
 from api.sse import (
     done_event,
     encode_sse,
@@ -25,6 +36,17 @@ from core.security import (
     require_api_key,
     sanitize_user_message,
     validate_session_id,
+)
+from core.accounts import (
+    AccountError,
+    AccountUser,
+    authenticate_user,
+    clear_user_conversations,
+    list_user_conversations,
+    register_user,
+    require_user,
+    revoke_token,
+    upsert_user_conversation,
 )
 
 logger = logging.getLogger("tripweaver")
@@ -46,6 +68,79 @@ async def create_session(
 ) -> SessionResponse:
     check_rate_limit(client_identity(request, api_key))
     return SessionResponse(session_id=new_session_id())
+
+
+def _user_response(user: AccountUser) -> UserResponse:
+    return UserResponse(**user.public())
+
+
+@router.post("/auth/register", response_model=AuthResponse)
+async def register(
+    payload: RegisterRequest, request: Request, api_key: str = Depends(require_api_key)
+) -> AuthResponse:
+    check_rate_limit(client_identity(request, api_key))
+    try:
+        token, user = register_user(payload.email, payload.password, payload.name)
+    except AccountError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return AuthResponse(token=token, user=_user_response(user))
+
+
+@router.post("/auth/login", response_model=AuthResponse)
+async def login(
+    payload: LoginRequest, request: Request, api_key: str = Depends(require_api_key)
+) -> AuthResponse:
+    check_rate_limit(client_identity(request, api_key))
+    try:
+        authenticated = authenticate_user(payload.email, payload.password)
+    except AccountError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not authenticated:
+        raise HTTPException(401, "Invalid email or password")
+    token, user = authenticated
+    return AuthResponse(token=token, user=_user_response(user))
+
+
+@router.post("/auth/logout")
+async def logout(
+    authorization: str | None = Header(default=None),
+    _: str = Depends(require_api_key),
+) -> dict[str, bool]:
+    if authorization and authorization.startswith("Bearer "):
+        revoke_token(authorization.removeprefix("Bearer ").strip())
+    return {"ok": True}
+
+
+@router.get("/auth/me", response_model=UserResponse)
+async def me(user: AccountUser = Depends(require_user)) -> UserResponse:
+    return _user_response(user)
+
+
+@router.get("/conversations", response_model=ConversationsResponse)
+async def conversations(user: AccountUser = Depends(require_user)) -> ConversationsResponse:
+    return ConversationsResponse(conversations=list_user_conversations(user.id))
+
+
+@router.put("/conversations/{conversation_id}")
+async def save_conversation(
+    conversation_id: str,
+    payload: ConversationSyncRequest,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, object]:
+    conversation = payload.conversation
+    if conversation.get("id") != conversation_id:
+        raise HTTPException(422, "Conversation id does not match route")
+    try:
+        saved = upsert_user_conversation(user.id, conversation)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "conversation": saved}
+
+
+@router.delete("/conversations")
+async def clear_conversations(user: AccountUser = Depends(require_user)) -> dict[str, bool]:
+    clear_user_conversations(user.id)
+    return {"ok": True}
 
 
 @router.post("/chat/stream")
