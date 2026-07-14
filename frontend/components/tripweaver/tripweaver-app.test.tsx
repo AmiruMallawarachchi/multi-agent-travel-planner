@@ -58,9 +58,12 @@ describe("TripWeaverApp", () => {
   })
 
   it("renders the requested travel workspace", async () => {
-    renderApp()
+    const { container } = renderApp()
 
     expect(screen.getByText("TripWeaver")).toBeInTheDocument()
+    expect(container.querySelector(".tw-app-background")).toBeInTheDocument()
+    expect(container.querySelector('img[src*="tripweaver-mark"]')).toBeInTheDocument()
+    expect(container.querySelector('img[src*="tripweaver-wordmark"]')).toBeInTheDocument()
     expect(screen.getByText("AI Trip Planning Assistant")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "New chat" })).toBeInTheDocument()
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
@@ -72,6 +75,27 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("button", { name: "Convert currency" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Find places" })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText("Backend online")).toBeInTheDocument())
+  })
+
+  it("persists the selected appearance and exposes responsive panels", async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole("button", { name: "Settings" }))
+    await user.click(screen.getByRole("switch", { name: "Dark appearance" }))
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveClass("dark")
+      expect(window.localStorage.getItem("tripweaver.theme")).toBe("dark")
+    })
+    await user.click(screen.getByRole("button", { name: "Close settings" }))
+
+    await user.click(screen.getByRole("button", { name: "History" }))
+    expect(screen.getByRole("dialog", { name: "Conversation history" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Close" }))
+
+    await user.click(screen.getByRole("button", { name: "Open trip status" }))
+    expect(screen.getByRole("dialog", { name: "Trip status" })).toBeInTheDocument()
   })
 
   it("prefills a supported quick action and streams a real chat response", async () => {
