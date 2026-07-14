@@ -5,67 +5,89 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.18 0.01 180);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.01 180);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.01 180);
-  --primary: oklch(0.31 0.055 178);
-  --primary-foreground: oklch(0.98 0.005 180);
-  --secondary: oklch(0.965 0.008 180);
-  --secondary-foreground: oklch(0.24 0.02 180);
-  --muted: oklch(0.965 0.006 180);
-  --muted-foreground: oklch(0.52 0.015 180);
-  --accent: oklch(0.94 0.025 175);
-  --accent-foreground: oklch(0.25 0.04 178);
-  --destructive: oklch(0.58 0.2 25);
-  --border: oklch(0.9 0.008 180);
-  --input: oklch(0.9 0.008 180);
-  --ring: oklch(0.55 0.07 178);
+  --background: rgba(255, 255, 255, 0.34);
+  --foreground: #14213d;
+  --card: rgba(255, 255, 255, 0.68);
+  --card-foreground: #14213d;
+  --popover: rgba(248, 251, 255, 0.9);
+  --popover-foreground: #14213d;
+  --primary: #163d63;
+  --primary-foreground: #f8fbff;
+  --secondary: rgba(221, 235, 247, 0.58);
+  --secondary-foreground: #173353;
+  --muted: rgba(235, 242, 249, 0.56);
+  --muted-foreground: #53647a;
+  --accent: rgba(198, 232, 239, 0.68);
+  --accent-foreground: #124f61;
+  --destructive: #b84352;
+  --border: rgba(255, 255, 255, 0.56);
+  --input: rgba(255, 255, 255, 0.52);
+  --ring: #197a92;
   --chart-1: oklch(0.55 0.09 178);
   --chart-2: oklch(0.62 0.12 220);
   --chart-3: oklch(0.66 0.13 145);
   --chart-4: oklch(0.7 0.13 70);
   --chart-5: oklch(0.62 0.16 25);
-  --radius: 0.5rem;
-  --sidebar: oklch(0.99 0.003 180);
-  --sidebar-foreground: oklch(0.18 0.01 180);
-  --sidebar-primary: oklch(0.31 0.055 178);
-  --sidebar-primary-foreground: oklch(0.98 0.005 180);
-  --sidebar-accent: oklch(0.94 0.025 175);
-  --sidebar-accent-foreground: oklch(0.25 0.04 178);
-  --sidebar-border: oklch(0.9 0.008 180);
-  --sidebar-ring: oklch(0.55 0.07 178);
+  --radius: 1rem;
+  --sidebar: rgba(248, 251, 255, 0.42);
+  --sidebar-foreground: #14213d;
+  --sidebar-primary: #163d63;
+  --sidebar-primary-foreground: #f8fbff;
+  --sidebar-accent: rgba(199, 232, 239, 0.66);
+  --sidebar-accent-foreground: #124f61;
+  --sidebar-border: rgba(255, 255, 255, 0.52);
+  --sidebar-ring: #197a92;
+  --tw-scene: url("/backgrounds/tripweaver-day-desktop.png");
+  --tw-scene-overlay: rgba(243, 248, 255, 0.1);
+  --tw-glass-panel: rgba(255, 255, 255, 0.38);
+  --tw-glass-panel-strong: rgba(255, 255, 255, 0.64);
+  --tw-glass-control: rgba(255, 255, 255, 0.48);
+  --tw-glass-border: rgba(255, 255, 255, 0.58);
+  --tw-glass-highlight: rgba(255, 255, 255, 0.54);
+  --tw-glass-shadow: 0 20px 65px rgba(38, 61, 124, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  --tw-glass-shadow-soft: 0 10px 32px rgba(42, 68, 130, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  --tw-scrollbar: rgba(27, 74, 101, 0.42);
+  color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.17 0.012 180);
-  --foreground: oklch(0.96 0.006 180);
-  --card: oklch(0.21 0.014 180);
-  --card-foreground: oklch(0.96 0.006 180);
-  --popover: oklch(0.21 0.014 180);
-  --popover-foreground: oklch(0.96 0.006 180);
-  --primary: oklch(0.78 0.075 175);
-  --primary-foreground: oklch(0.18 0.02 180);
-  --secondary: oklch(0.27 0.015 180);
-  --secondary-foreground: oklch(0.94 0.006 180);
-  --muted: oklch(0.27 0.015 180);
-  --muted-foreground: oklch(0.7 0.012 180);
-  --accent: oklch(0.3 0.035 175);
-  --accent-foreground: oklch(0.96 0.006 180);
-  --destructive: oklch(0.7 0.18 24);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.68 0.06 175);
-  --sidebar: oklch(0.2 0.014 180);
-  --sidebar-foreground: oklch(0.96 0.006 180);
-  --sidebar-primary: oklch(0.78 0.075 175);
-  --sidebar-primary-foreground: oklch(0.18 0.02 180);
-  --sidebar-accent: oklch(0.3 0.035 175);
-  --sidebar-accent-foreground: oklch(0.96 0.006 180);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.68 0.06 175);
+  --background: rgba(6, 17, 40, 0.42);
+  --foreground: #edf5ff;
+  --card: rgba(8, 20, 48, 0.7);
+  --card-foreground: #edf5ff;
+  --popover: rgba(7, 18, 44, 0.92);
+  --popover-foreground: #edf5ff;
+  --primary: #9ad8e5;
+  --primary-foreground: #07182c;
+  --secondary: rgba(35, 61, 97, 0.58);
+  --secondary-foreground: #eff7ff;
+  --muted: rgba(30, 51, 83, 0.58);
+  --muted-foreground: #aec0d8;
+  --accent: rgba(42, 99, 122, 0.62);
+  --accent-foreground: #effaff;
+  --destructive: #ff8792;
+  --border: rgba(150, 190, 255, 0.2);
+  --input: rgba(138, 180, 238, 0.16);
+  --ring: #77d1df;
+  --sidebar: rgba(7, 18, 46, 0.42);
+  --sidebar-foreground: #edf5ff;
+  --sidebar-primary: #9ad8e5;
+  --sidebar-primary-foreground: #07182c;
+  --sidebar-accent: rgba(37, 85, 108, 0.58);
+  --sidebar-accent-foreground: #effaff;
+  --sidebar-border: rgba(150, 190, 255, 0.2);
+  --sidebar-ring: #77d1df;
+  --tw-scene: url("/backgrounds/tripweaver-night-desktop.png");
+  --tw-scene-overlay: rgba(2, 8, 28, 0.2);
+  --tw-glass-panel: rgba(7, 18, 46, 0.42);
+  --tw-glass-panel-strong: rgba(8, 20, 48, 0.7);
+  --tw-glass-control: rgba(18, 39, 75, 0.58);
+  --tw-glass-border: rgba(150, 190, 255, 0.2);
+  --tw-glass-highlight: rgba(185, 215, 255, 0.12);
+  --tw-glass-shadow: 0 24px 72px rgba(0, 4, 20, 0.5), inset 0 1px 0 rgba(185, 215, 255, 0.12);
+  --tw-glass-shadow-soft: 0 12px 36px rgba(0, 4, 20, 0.34), inset 0 1px 0 rgba(185, 215, 255, 0.1);
+  --tw-scrollbar: rgba(156, 205, 235, 0.42);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -116,17 +138,123 @@
 
   html {
     @apply font-sans;
+    min-width: 320px;
+    background: #102949;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    min-width: 320px;
+    min-height: 100svh;
     margin: 0;
     letter-spacing: 0;
+    overflow: hidden;
   }
 
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+
+  * {
+    scrollbar-color: var(--tw-scrollbar) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--tw-scrollbar);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .tw-app-background {
+    background-color: #c7d9ef;
+    background-image: linear-gradient(var(--tw-scene-overlay), var(--tw-scene-overlay)), var(--tw-scene);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  .tw-app-shell,
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-control,
+  .glass-card {
+    border: 1px solid var(--tw-glass-border);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .tw-app-shell,
+  .glass-panel {
+    background: var(--tw-glass-panel);
+    box-shadow: var(--tw-glass-shadow);
+  }
+
+  .glass-panel-strong,
+  .glass-card {
+    background: var(--tw-glass-panel-strong);
+    box-shadow: var(--tw-glass-shadow-soft);
+  }
+
+  .glass-control {
+    background: var(--tw-glass-control);
+    box-shadow: inset 0 1px 0 var(--tw-glass-highlight);
+  }
+
+  .glass-divider {
+    border-color: var(--tw-glass-border);
+  }
+
+  .glass-interactive {
+    transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease, transform 180ms ease;
+  }
+
+  .glass-interactive:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--ring) 42%, var(--tw-glass-border));
+    box-shadow: var(--tw-glass-shadow-soft);
+  }
+
+  .glass-interactive:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .brand-art {
+    mix-blend-mode: multiply;
+    filter: contrast(1.3);
+  }
+
+  .dark .brand-art {
+    mix-blend-mode: screen;
+    filter: invert(1) contrast(1.25);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --tw-scene: url("/backgrounds/tripweaver-day-mobile.png");
+  }
+
+  .dark {
+    --tw-scene: url("/backgrounds/tripweaver-night-mobile.png");
+  }
+}
+
+@media (min-width: 768px) {
+  .tw-app-background {
+    background-attachment: fixed;
   }
 }
 
