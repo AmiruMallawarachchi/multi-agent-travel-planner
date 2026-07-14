@@ -268,16 +268,21 @@ function ConversationExport({ conversation }: { conversation: Conversation }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          className="glass-control glass-interactive h-11 rounded-xl"
-          aria-label="Export or share conversation"
-        >
-          <Share2 aria-hidden="true" />
-          <span className="hidden sm:inline">Export / Share</span>
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="glass-control glass-interactive size-11 rounded-xl"
+              aria-label="Export or share conversation"
+            >
+              <Share2 aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Export or share</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onSelect={() => void shareTranscript()}>
           <Share2 />

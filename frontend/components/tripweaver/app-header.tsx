@@ -59,15 +59,9 @@ export function AppHeader({
             className="brand-art size-10 object-contain"
           />
         </div>
-        <Image
-          src="/brand/tripweaver-wordmark.jpg"
-          alt=""
-          width={132}
-          height={60}
-          priority
-          className="brand-art h-10 w-[104px] object-contain sm:w-[124px]"
-        />
-        <span className="sr-only">TripWeaver</span>
+        <span className="truncate text-base font-semibold text-foreground sm:text-lg">
+          TripWeaver
+        </span>
       </div>
 
       <div className="hidden min-w-0 items-center justify-center gap-3 md:flex">
