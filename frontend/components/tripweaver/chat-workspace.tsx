@@ -80,7 +80,7 @@ function statusLabel(status: ToolActivity["status"]) {
 
 function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
   return (
-    <div className="mb-3 overflow-hidden rounded-md border bg-[#fbfcfc]">
+    <div className="mb-3 overflow-hidden rounded-md border bg-card text-card-foreground">
       <div className="flex h-9 items-center gap-2 border-b px-3 text-xs font-semibold">
         <Sparkles className="size-3.5 text-[#2f7d72]" aria-hidden="true" />
         Tool activity
@@ -142,7 +142,7 @@ function MessageBubble({
       <div
         className={cn(
           "mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border bg-background",
-          !isUser && "border-[#b8d1cc] bg-[#e8f1ef] text-[#153e3a]",
+          !isUser && "border-primary/30 bg-accent text-accent-foreground",
         )}
         aria-hidden="true"
       >
@@ -154,7 +154,7 @@ function MessageBubble({
         <div
           className={cn(
             "rounded-md border px-4 py-3 text-sm leading-6 shadow-xs",
-            isUser ? "bg-[#f4f6f6]" : "bg-background",
+            isUser ? "bg-secondary text-secondary-foreground" : "bg-card text-card-foreground",
           )}
         >
           {message.content ? (
@@ -362,7 +362,7 @@ export function ChatWorkspace({
         </div>
       </div>
 
-      <div className="border-t bg-[#fbfcfc] px-3 pb-2 pt-3 md:px-5">
+      <div className="border-t bg-sidebar px-3 pb-2 pt-3 md:px-5">
         <form className="mx-auto w-full max-w-[900px]" onSubmit={submit}>
           {attachments.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">

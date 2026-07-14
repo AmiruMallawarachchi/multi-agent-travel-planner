@@ -438,7 +438,7 @@ export function TripWeaverApp() {
   )
 
   return (
-    <main className="h-svh min-h-[560px] bg-[#eef2f1] xl:p-4">
+    <main className="h-svh min-h-[560px] bg-muted xl:p-4">
       <div className="mx-auto grid h-full max-w-[1600px] grid-rows-[68px_minmax(0,1fr)] overflow-hidden border bg-background shadow-sm xl:h-[calc(100svh-2rem)] xl:rounded-lg">
         <AppHeader
           backendOnline={state.runtime.backendOnline}
@@ -465,7 +465,7 @@ export function TripWeaverApp() {
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
           />
-          <div className="hidden min-h-0 overflow-y-auto border-l bg-[#fbfcfc] xl:block">
+          <div className="hidden min-h-0 overflow-y-auto border-l bg-sidebar xl:block">
             {statusPanel}
           </div>
         </div>

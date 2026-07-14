@@ -51,7 +51,7 @@ export function ConversationSidebar({
   const groups = groupConversations(filtered)
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-[#fbfcfc]", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground", className)}>
       <div className="space-y-3 border-b p-3">
         <Button
           variant="outline"
@@ -103,8 +103,9 @@ export function ConversationSidebar({
                       aria-current={conversation.id === activeConversationId ? "page" : undefined}
                       onClick={() => onSelect(conversation.id)}
                       className={cn(
-                        "grid w-full grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
-                        conversation.id === activeConversationId && "bg-[#e8f1ef] hover:bg-[#e8f1ef]",
+                        "grid w-full grid-cols-[18px_minmax(0,1fr)] items-start gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        conversation.id === activeConversationId &&
+                          "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
                       )}
                     >
                       <MessageSquare className="mt-0.5 size-4 text-muted-foreground" aria-hidden="true" />
