@@ -49,3 +49,11 @@ def test_production_stack_scopes_provider_secrets():
     for name in ("backend", "frontend", "itinerary-mcp", "weather-mcp", "currency-mcp"):
         assert "SERPAPI_API_KEY" not in services[name]["environment"]
     assert services["frontend"]["environment"]["BACKEND_URL"] == "http://backend:8000"
+
+
+def test_production_stack_checks_frontend_health():
+    frontend = _compose()["services"]["frontend"]
+
+    assert frontend["depends_on"]["backend"] == {"condition": "service_healthy"}
+    assert frontend["healthcheck"]["interval"] == "20s"
+    assert "http://localhost:3000/api/health" in " ".join(frontend["healthcheck"]["test"])

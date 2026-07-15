@@ -130,6 +130,11 @@ services:
       BACKEND_API_KEY: ${TRIPWEAVER_API_KEY:?Set TRIPWEAVER_API_KEY in deploy/production/.env}
     depends_on:
       backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
 
   caddy:
     image: caddy:2.10-alpine
