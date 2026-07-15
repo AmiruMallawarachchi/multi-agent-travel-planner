@@ -12,11 +12,20 @@ __pycache__/
 htmlcov/
 .coverage
 *.egg-info/
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
 
 # OS / editor
 .DS_Store
 .vscode/
 .idea/
+.agents/
+skills-lock.json
 
 # Logs
 *.log
+*.sqlite
+*.sqlite3

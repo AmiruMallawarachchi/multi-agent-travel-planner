@@ -5,12 +5,14 @@ These stay offline: the LangGraph object is replaced with a tiny async fake so
 we can verify auth, sessions, CORS, tool-status events, and graceful failures
 without OpenAI or MCP servers.
 """
+
 from __future__ import annotations
 
 import json
 
 from fastapi.testclient import TestClient
 
+from api import routes
 import main
 from core import security
 
@@ -37,8 +39,12 @@ def _events(body: str) -> list[dict]:
     return parsed
 
 
-def _client(monkeypatch, *, keys: set[str] | None = None, rate_limit: int = 20) -> TestClient:
-    monkeypatch.setattr(security, "VALID_API_KEYS", keys if keys is not None else {"test-key"})
+def _client(
+    monkeypatch, *, keys: set[str] | None = None, rate_limit: int = 20
+) -> TestClient:
+    monkeypatch.setattr(
+        security, "VALID_API_KEYS", keys if keys is not None else {"test-key"}
+    )
     security._hits.clear()
     monkeypatch.setattr(security, "RATE_LIMIT_REQUESTS", rate_limit)
     monkeypatch.setattr(security, "RATE_LIMIT_WINDOW_SECONDS", 60)
@@ -47,15 +53,39 @@ def _client(monkeypatch, *, keys: set[str] | None = None, rate_limit: int = 20) 
 
 class TestApiSecurity:
     def test_health_is_unauthenticated(self, monkeypatch):
+        async def statuses():
+            return {
+                "hotel-mcp": "available",
+                "flight-mcp": "available",
+                "itinerary-mcp": "available",
+                "weather-mcp": "unavailable",
+                "currency-mcp": "available",
+                "location-mcp": "unavailable",
+            }
+
+        monkeypatch.setattr(routes, "get_server_statuses", statuses)
         client = _client(monkeypatch)
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json()["status"] == "ok"
+        assert response.json() == {
+            "status": "ok",
+            "service": "tripweaver-backend",
+            "mcp_servers": {
+                "hotel-mcp": "available",
+                "flight-mcp": "available",
+                "itinerary-mcp": "available",
+                "weather-mcp": "unavailable",
+                "currency-mcp": "available",
+                "location-mcp": "unavailable",
+            },
+        }
 
     def test_session_requires_api_key_when_configured(self, monkeypatch):
         client = _client(monkeypatch)
         assert client.post("/session").status_code == 401
-        assert client.post("/session", headers={"X-API-Key": "wrong"}).status_code == 401
+        assert (
+            client.post("/session", headers={"X-API-Key": "wrong"}).status_code == 401
+        )
 
         response = client.post("/session", headers={"X-API-Key": "test-key"})
         assert response.status_code == 200
@@ -63,10 +93,13 @@ class TestApiSecurity:
 
     def test_session_and_chat_share_rate_limit_bucket(self, monkeypatch):
         fake_graph = FakeGraph()
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch, rate_limit=1)
 
-        assert client.post("/session", headers={"X-API-Key": "test-key"}).status_code == 200
+        assert (
+            client.post("/session", headers={"X-API-Key": "test-key"}).status_code
+            == 200
+        )
         response = client.post(
             "/chat/stream",
             headers={"X-API-Key": "test-key"},
@@ -76,7 +109,7 @@ class TestApiSecurity:
 
     def test_invalid_session_id_is_rejected_before_graph_runs(self, monkeypatch):
         fake_graph = FakeGraph()
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -114,7 +147,7 @@ class TestSseBridge:
                 },
             ]
         )
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -126,11 +159,52 @@ class TestSseBridge:
         assert response.status_code == 200
         events = _events(response.text)
         assert events[0]["type"] == "session"
-        assert {"type": "status", "state": "ROUTING", "node": "classify_intent"} in events
+        assert {
+            "type": "status",
+            "state": "ROUTING",
+            "node": "classify_intent",
+        } in events
         assert {"type": "tool", "status": "INVOKED", "tool": "search_hotels"} in events
-        assert {"type": "tool", "status": "SUCCEEDED", "tool": "search_hotels"} in events
+        assert {
+            "type": "tool",
+            "status": "SUCCEEDED",
+            "tool": "search_hotels",
+        } in events
         assert {"type": "token", "content": "hello"} in events
         assert events[-1] == {"type": "done"}
+
+    def test_stream_emits_structured_itinerary_result(self, monkeypatch):
+        fake_graph = FakeGraph(
+            [
+                {
+                    "event": "on_tool_end",
+                    "name": "create_itinerary",
+                    "data": {
+                        "output": {
+                            "ok": True,
+                            "itinerary": {
+                                "destination": "Tokyo",
+                                "days": [{"date": "2026-12-10", "items": []}],
+                            },
+                        }
+                    },
+                }
+            ]
+        )
+        monkeypatch.setattr(routes, "graph", fake_graph)
+        client = _client(monkeypatch)
+
+        response = client.post(
+            "/chat/stream",
+            headers={"X-API-Key": "test-key"},
+            json={"message": "plan Tokyo"},
+        )
+
+        events = _events(response.text)
+        result = next(event for event in events if event["type"] == "result")
+        assert result["result_type"] == "itinerary"
+        assert result["tool"] == "create_itinerary"
+        assert result["data"]["destination"] == "Tokyo"
 
     def test_stream_normalizes_frontend_friendly_events(self, monkeypatch):
         fake_graph = FakeGraph(
@@ -138,12 +212,16 @@ class TestSseBridge:
                 {"event": "on_tool_start", "name": ""},
                 {
                     "event": "on_chat_model_stream",
-                    "data": {"chunk": type("Chunk", (), {"content": [{"text": "hel"}, "lo"]})()},
+                    "data": {
+                        "chunk": type(
+                            "Chunk", (), {"content": [{"text": "hel"}, "lo"]}
+                        )()
+                    },
                 },
                 {"event": "unknown_event"},
             ]
         )
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
@@ -160,7 +238,7 @@ class TestSseBridge:
 
     def test_stream_turns_graph_exception_into_error_event(self, monkeypatch):
         fake_graph = FakeGraph(exc=RuntimeError("boom"))
-        monkeypatch.setattr(main, "graph", fake_graph)
+        monkeypatch.setattr(routes, "graph", fake_graph)
         client = _client(monkeypatch)
 
         response = client.post(
