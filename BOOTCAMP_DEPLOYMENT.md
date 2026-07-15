@@ -65,9 +65,9 @@ Use these settings if you create the Render service manually:
 ```text
 Service type: Web Service
 Repository: AmiruMallawarachchi/multi-agent-travel-planner
-Root directory: backend
+Root directory: .
 Runtime: Docker
-Dockerfile: backend/Dockerfile
+Dockerfile: deploy/render/backend.Dockerfile
 Health check path: /health
 Plan: Free
 ```
@@ -84,6 +84,7 @@ AGENT_MODEL=gpt-4o-mini
 RATE_LIMIT_REQUESTS=20
 RATE_LIMIT_WINDOW_SECONDS=60
 MAX_MESSAGE_LENGTH=2000
+TRIPWEAVER_TOOL_MODE=local
 ```
 
 Optional when live search tools are enabled:
@@ -166,26 +167,22 @@ This path supports:
 - per-user conversation history persisted in Supabase Postgres
 - server-side proxying so browser users never receive backend API keys
 - OpenAI-backed general chat when `OPENAI_API_KEY` has quota
+- in-process flight, hotel, itinerary, weather, currency, and location tools
+  inside the single Render backend service
 
 ## 6. Current limitation
 
-The full TripWeaver production stack has one backend plus six separate MCP
-services. Render Free is not a good fit for seven always-on backend services.
+The bootcamp deployment uses `TRIPWEAVER_TOOL_MODE=local`, which keeps the demo
+inside one Render Free service by running tool adapters in the backend process.
+The full production architecture still uses six separate MCP services for
+stronger isolation and clearer ownership boundaries.
 
-For the bootcamp demo, the next engineering step is to collapse the MCP calls
-into a single-process backend mode or keep only the most important tools live.
-Until that is done, the backend can still deploy on Render, but unavailable MCP
-services will appear as unavailable in the UI.
+Provider-backed tools still depend on their upstream services:
 
-Recommended next phase:
-
-```text
-TRIPWEAVER_TOOL_MODE=local
-```
-
-In that mode, the backend should call provider clients in-process instead of
-requiring six separate MCP web services. That keeps the demo inside one Render
-Free service.
+- OpenAI quota for chat
+- SerpApi quota for hotel, flight, and place search
+- Open-Meteo availability for weather/geocoding
+- Frankfurter availability and supported currency list for exchange rates
 
 ## 7. Zero-payment safety
 
@@ -198,4 +195,3 @@ Use only:
 Do not add a credit card-only paid compute service for this demo. Render Free
 can sleep after inactivity, so the first request may be slow. That is acceptable
 for a bootcamp demo, but not for a real production launch.
-

@@ -51,6 +51,7 @@ MCP_SERVER_URLS: dict[ServerName, str] = {
 }
 HEALTH_TIMEOUT = httpx.Timeout(connect=1.0, read=2.0, write=1.0, pool=1.0)
 logger = logging.getLogger("tripweaver.mcp")
+TOOL_MODE = os.getenv("TRIPWEAVER_TOOL_MODE", "mcp").strip().lower()
 
 # After this many consecutive failures, stop hitting the server for a while
 # instead of making every traveller wait out a timeout on a server that's down.
@@ -94,6 +95,10 @@ def breaker_open(server: ServerName) -> bool:
     return _breakers[server].is_open()
 
 
+def using_local_tools() -> bool:
+    return TOOL_MODE in {"local", "in-process", "in_process"}
+
+
 async def get_tools_for(server: ServerName) -> list:
     """
     Load only `server`'s tools. Never raises: an unreachable server or an
@@ -101,6 +106,15 @@ async def get_tools_for(server: ServerName) -> list:
     back and can degrade gracefully (SRS section 5 / 6 / 7) instead of the
     whole turn failing.
     """
+    if using_local_tools():
+        try:
+            from agents.local_tools import get_local_tools_for
+
+            return get_local_tools_for(server)
+        except Exception:  # noqa: BLE001 - local demo tools should degrade too
+            logger.exception("Local tool loading failed for %s", server)
+            return []
+
     if breaker_open(server):
         return []
     try:
@@ -140,6 +154,9 @@ async def _probe_server(
 
 async def get_server_statuses() -> dict[ServerName, ServerStatus]:
     """Probe each MCP process without exposing internal service URLs."""
+    if using_local_tools():
+        return {server: "available" for server in MCP_SERVER_URLS}
+
     servers = list(MCP_SERVER_URLS)
     async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT, trust_env=False) as client:
         probes = await asyncio.gather(

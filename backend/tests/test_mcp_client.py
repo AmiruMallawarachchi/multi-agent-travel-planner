@@ -25,6 +25,7 @@ def test_registry_contains_every_tripweaver_mcp_service():
 
 @pytest.mark.asyncio
 async def test_tools_are_connection_backed_and_scoped_to_one_server(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "mcp")
     tool = SimpleNamespace(name="get_weather_forecast")
     get_tools = AsyncMock(return_value=[tool])
     monkeypatch.setattr(
@@ -42,6 +43,8 @@ async def test_tools_are_connection_backed_and_scoped_to_one_server(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_health_statuses_are_normalized_without_exposing_urls(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "mcp")
+
     class SharedClient:
         instances = 0
 
@@ -74,3 +77,25 @@ async def test_health_statuses_are_normalized_without_exposing_urls(monkeypatch)
     assert statuses["weather-mcp"] == "unavailable"
     assert statuses["location-mcp"] == "unavailable"
     assert all("http" not in value for value in statuses.values())
+
+
+@pytest.mark.asyncio
+async def test_local_tool_mode_returns_in_process_tools(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "local")
+
+    tools = await mcp_client.get_tools_for("hotel-mcp")
+
+    assert {tool.name for tool in tools} == {
+        "list_hotels",
+        "search_hotels",
+        "book_hotel",
+    }
+
+
+@pytest.mark.asyncio
+async def test_local_tool_mode_marks_registered_servers_available(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "local")
+
+    statuses = await mcp_client.get_server_statuses()
+
+    assert statuses == {server: "available" for server in EXPECTED_SERVERS}
