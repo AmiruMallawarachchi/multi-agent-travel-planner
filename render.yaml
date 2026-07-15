@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: tripweaver-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: ROUTER_MODEL
+        value: gpt-4o-mini
+      - key: AGENT_MODEL
+        value: gpt-4o-mini
+      - key: RATE_LIMIT_REQUESTS
+        value: "20"
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: MAX_MESSAGE_LENGTH
+        value: "2000"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TRIPWEAVER_API_KEYS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SERPAPI_API_KEY
+        sync: false

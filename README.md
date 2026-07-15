@@ -16,6 +16,7 @@ reserves travel.
 - [MCP setup and provider contracts](./MCP_SETUP.md)
 - [Security model](./SECURITY.md)
 - [Production deployment](./DEPLOYMENT.md)
+- [Bootcamp Vercel + Render + Supabase deployment](./BOOTCAMP_DEPLOYMENT.md)
 - [Frontend guide](./frontend/README.md)
 
 ## Architecture
