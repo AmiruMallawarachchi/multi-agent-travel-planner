@@ -19,9 +19,22 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi import Header, HTTPException, status
+
+try:  # Optional unless DATABASE_URL points at Postgres/Supabase.
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover - exercised by deployments without psycopg
+    psycopg = None
+    dict_row = None
+
+INTEGRITY_ERRORS = (
+    (sqlite3.IntegrityError, psycopg.IntegrityError)
+    if psycopg is not None
+    else (sqlite3.IntegrityError,)
+)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PASSWORD_MIN_LENGTH = 8
@@ -53,6 +66,21 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class _Connection(Protocol):
+    def execute(self, query: str, params: tuple[Any, ...] = ()) -> Any: ...
+
+    def commit(self) -> None: ...
+
+
+def _database_url() -> str:
+    return os.getenv("DATABASE_URL", "").strip()
+
+
+def _uses_postgres() -> bool:
+    url = _database_url()
+    return url.startswith(("postgres://", "postgresql://"))
+
+
 def _db_path() -> Path:
     configured = os.getenv("TRIPWEAVER_DB_PATH")
     if configured:
@@ -60,7 +88,24 @@ def _db_path() -> Path:
     return Path(__file__).resolve().parents[1] / "data" / "tripweaver.sqlite3"
 
 
-def _connect() -> sqlite3.Connection:
+def _sql(query: str) -> str:
+    """Translate SQLite placeholders to psycopg placeholders when needed."""
+    return query.replace("?", "%s") if _uses_postgres() else query
+
+
+def _connect() -> _Connection:
+    if _uses_postgres():
+        if psycopg is None or dict_row is None:
+            raise RuntimeError(
+                "DATABASE_URL is configured for Postgres but psycopg is not installed"
+            )
+        url = _database_url()
+        if url.startswith("postgres://"):
+            url = f"postgresql://{url.removeprefix('postgres://')}"
+        connection = psycopg.connect(url, connect_timeout=5, row_factory=dict_row)
+        _ensure_schema(connection)
+        return connection
+
     path = _db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
@@ -70,8 +115,8 @@ def _connect() -> sqlite3.Connection:
     return connection
 
 
-def _ensure_schema(connection: sqlite3.Connection) -> None:
-    connection.executescript(
+def _ensure_schema(connection: _Connection) -> None:
+    statements = (
         """
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
@@ -79,15 +124,17 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             created_at TEXT NOT NULL
-        );
-
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS auth_sessions (
             token_hash TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             expires_at TEXT NOT NULL,
             created_at TEXT NOT NULL
-        );
-
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT NOT NULL,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -96,9 +143,11 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (id, user_id)
-        );
-        """
+        )
+        """,
     )
+    for statement in statements:
+        connection.execute(statement)
     connection.commit()
 
 
@@ -158,7 +207,7 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _row_to_user(row: sqlite3.Row) -> AccountUser:
+def _row_to_user(row: sqlite3.Row | dict[str, Any]) -> AccountUser:
     return AccountUser(
         id=row["id"],
         email=row["email"],
@@ -171,10 +220,12 @@ def _create_session(connection: sqlite3.Connection, user_id: str) -> str:
     token = secrets.token_urlsafe(32)
     now = _utc_now()
     connection.execute(
+        _sql(
         """
         INSERT INTO auth_sessions (token_hash, user_id, expires_at, created_at)
         VALUES (?, ?, ?, ?)
         """,
+        ),
         (
             _hash_token(token),
             user_id,
@@ -195,10 +246,12 @@ def register_user(email: str, password: str, name: str | None = None) -> tuple[s
     with _connect() as connection:
         try:
             connection.execute(
+                _sql(
                 """
                 INSERT INTO users (id, email, name, password_hash, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
+                ),
                 (
                     user_id,
                     normalized_email,
@@ -207,7 +260,7 @@ def register_user(email: str, password: str, name: str | None = None) -> tuple[s
                     now,
                 ),
             )
-        except sqlite3.IntegrityError as exc:
+        except INTEGRITY_ERRORS as exc:
             raise AccountError("An account with this email already exists") from exc
 
         token = _create_session(connection, user_id)
@@ -225,7 +278,7 @@ def authenticate_user(email: str, password: str) -> tuple[str, AccountUser] | No
     normalized_email = _normalize_email(email)
     with _connect() as connection:
         row = connection.execute(
-            "SELECT * FROM users WHERE email = ?", (normalized_email,)
+            _sql("SELECT * FROM users WHERE email = ?"), (normalized_email,)
         ).fetchone()
         if not row or not _verify_password(password, row["password_hash"]):
             return None
@@ -237,12 +290,14 @@ def authenticate_user(email: str, password: str) -> tuple[str, AccountUser] | No
 def user_from_token(token: str) -> AccountUser | None:
     with _connect() as connection:
         row = connection.execute(
+            _sql(
             """
             SELECT users.*
             FROM auth_sessions
             JOIN users ON users.id = auth_sessions.user_id
             WHERE auth_sessions.token_hash = ? AND auth_sessions.expires_at > ?
             """,
+            ),
             (_hash_token(token), _utc_now().isoformat()),
         ).fetchone()
         return _row_to_user(row) if row else None
@@ -251,7 +306,8 @@ def user_from_token(token: str) -> AccountUser | None:
 def revoke_token(token: str) -> None:
     with _connect() as connection:
         connection.execute(
-            "DELETE FROM auth_sessions WHERE token_hash = ?", (_hash_token(token),)
+            _sql("DELETE FROM auth_sessions WHERE token_hash = ?"),
+            (_hash_token(token),),
         )
         connection.commit()
 
@@ -269,12 +325,14 @@ async def require_user(authorization: str | None = Header(default=None)) -> Acco
 def list_user_conversations(user_id: str) -> list[dict[str, Any]]:
     with _connect() as connection:
         rows = connection.execute(
+            _sql(
             """
             SELECT payload
             FROM conversations
             WHERE user_id = ?
             ORDER BY updated_at DESC
             """,
+            ),
             (user_id,),
         ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
@@ -291,6 +349,7 @@ def upsert_user_conversation(user_id: str, payload: dict[str, Any]) -> dict[str,
     serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     with _connect() as connection:
         connection.execute(
+            _sql(
             """
             INSERT INTO conversations (id, user_id, title, payload, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -299,6 +358,7 @@ def upsert_user_conversation(user_id: str, payload: dict[str, Any]) -> dict[str,
                 payload = excluded.payload,
                 updated_at = excluded.updated_at
             """,
+            ),
             (conversation_id, user_id, title[:160], serialized, created_at, updated_at),
         )
         connection.commit()
@@ -307,6 +367,8 @@ def upsert_user_conversation(user_id: str, payload: dict[str, Any]) -> dict[str,
 
 def clear_user_conversations(user_id: str) -> None:
     with _connect() as connection:
-        connection.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+        connection.execute(
+            _sql("DELETE FROM conversations WHERE user_id = ?"), (user_id,)
+        )
         connection.commit()
 

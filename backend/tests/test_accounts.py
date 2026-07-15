@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import main
+from core import accounts
 from core import security
 
 
@@ -126,4 +127,22 @@ def test_conversation_routes_require_account_session(monkeypatch, tmp_path):
             json={"conversation": {"id": "trip-1", "title": "Trip"}},
         ).status_code
         == 401
+    )
+
+
+def test_database_url_selects_postgres_sql(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example/postgres")
+
+    assert accounts._uses_postgres()
+    assert accounts._sql("SELECT * FROM users WHERE email = ?") == (
+        "SELECT * FROM users WHERE email = %s"
+    )
+
+
+def test_sqlite_remains_default_without_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    assert not accounts._uses_postgres()
+    assert accounts._sql("SELECT * FROM users WHERE email = ?") == (
+        "SELECT * FROM users WHERE email = ?"
     )
