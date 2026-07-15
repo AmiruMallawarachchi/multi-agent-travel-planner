@@ -72,9 +72,14 @@ flowchart TB
     CMCP --> Rates[Frankfurter]
 ```
 
-There are eight deployable processes. MCP services do not import backend agent
-code, and backend agents do not import provider clients. HTTP plus MCP is the
-boundary between them.
+The full topology has eight deployable processes. MCP services do not import
+backend agent code, and backend agents do not import provider clients. HTTP plus
+MCP is the boundary between them.
+
+The bootcamp deployment can set `TRIPWEAVER_TOOL_MODE=local` so the backend
+loads equivalent in-process tool adapters instead of connecting to six separate
+MCP web services. That mode is for constrained demo hosting such as Render Free;
+the MCP service boundary remains the production ownership model.
 
 ## 3. Layer responsibilities
 
@@ -156,14 +161,16 @@ process remains alive. It is not durable and is not shared across replicas.
 
 ### 3.4 MCP adapter
 
-`backend/agents/mcp_client.py` is the only backend module that knows MCP service
-URLs. It owns:
+`backend/agents/mcp_client.py` is the backend module that knows MCP service
+URLs and decides whether tools are discovered over MCP or loaded in-process for
+the bootcamp demo. It owns:
 
 - the six-server registry
 - server-scoped tool discovery
 - independent circuit breakers
 - health probes
 - controlled degradation when discovery fails
+- `TRIPWEAVER_TOOL_MODE=local` support for single-service demo deployments
 
 Tool loading uses:
 
@@ -177,6 +184,11 @@ be bound to a closed stream after discovery exits.
 
 Each circuit opens after three consecutive discovery failures and cools down
 for 60 seconds. Breakers are process-local.
+
+When local mode is enabled, `backend/agents/local_tools.py` exposes tools with
+the same names as the MCP tools and reuses the provider/domain clients from
+`mcp_servers/`. Health reports registered tool groups as available because no
+external MCP process needs to be probed.
 
 ### 3.5 MCP services
 
@@ -277,6 +289,11 @@ typed frontend data.
 - `SERPAPI_API_KEY` exists only in hotel, flight, and location MCP environments.
 - `TRIPWEAVER_API_KEYS` exists only in the backend.
 - A matching `BACKEND_API_KEY` exists only in the Next.js server environment.
+- `DATABASE_URL` exists only in the backend environment when Supabase/Postgres
+  persistence is used.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` may be
+  exposed to the browser; the Supabase database URL and service credentials may
+  not be exposed to the browser.
 - `.env` files are ignored and Docker build contexts exclude them.
 - Provider errors are sanitized and keys are never intentionally logged.
 
@@ -334,6 +351,8 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `LOCATION_MCP_URL` | Location MCP `/mcp` URL |
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
 | `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
+| `DATABASE_URL` | Optional Postgres/Supabase URL for account and conversation persistence |
+| `TRIPWEAVER_TOOL_MODE` | `mcp` for service discovery, `local` for single-service demo tools |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins |
 | `RATE_LIMIT_REQUESTS` | Requests allowed per local window |
 | `RATE_LIMIT_WINDOW_SECONDS` | Local rate-limit window |
@@ -345,6 +364,8 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | --- | --- |
 | `BACKEND_URL` | FastAPI base URL |
 | `BACKEND_API_KEY` | One value accepted by `TRIPWEAVER_API_KEYS` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional publishable Supabase project URL for frontend helpers |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Optional publishable Supabase browser key |
 | `PORT` | Frontend process port |
 
 ### MCP services
@@ -405,8 +426,9 @@ Required release checks are documented in [README.md](./README.md).
 6. A turn routes to one specialist; a combined flight/hotel/weather itinerary
    orchestration node is not implemented.
 7. LangGraph memory, rate limiting, and circuit state are process-local.
-8. Account history uses local SQLite by default; managed Postgres is recommended
-   before multi-instance production deploys.
+8. Account history uses local SQLite by default and can use managed
+   Postgres/Supabase through `DATABASE_URL`; shared graph memory and rate limits
+   are still required before multi-instance production deploys.
 9. Booking is simulated and intentionally cannot transact.
 10. Python dependencies use bounded minimum ranges rather than a committed lock
     artifact. Production deployments should use reviewed exact locks.

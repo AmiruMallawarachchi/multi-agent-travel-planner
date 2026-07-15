@@ -51,9 +51,12 @@ flowchart LR
     CMCP --> Frankfurter[Frankfurter rates]
 ```
 
-The repository contains eight independently runnable services: the frontend,
-the backend, and six MCP servers. The backend is the only service that talks to
-OpenAI. The browser receives no OpenAI, SerpApi, or backend API secrets.
+The repository contains the full eight-service topology: the frontend, the
+backend, and six MCP servers. For the bootcamp demo, the backend can also run
+provider tools in-process with `TRIPWEAVER_TOOL_MODE=local`, which fits the
+Vercel, Render, and Supabase demo path without standing up six extra web
+services. The backend is the only service that talks to OpenAI. The browser
+receives no OpenAI, SerpApi, database, or backend API secrets.
 
 ## Capabilities
 
@@ -84,6 +87,7 @@ frontend/
   app/                    Next.js routes and server-side API proxies
   components/             shadcn/ui and TripWeaver workspace components
   features/tripweaver/    stream reducer, conversations, trip context, types
+  lib/                    shared helpers, including optional Supabase clients
 mcp_servers/
   hotel_mcp/              SerpApi Google Hotels adapter
   flight_mcp/             SerpApi Google Flights adapter
@@ -91,14 +95,16 @@ mcp_servers/
   weather_mcp/            Open-Meteo weather adapter
   currency_mcp/           Frankfurter exchange-rate adapter
   location_mcp/           geocoding and SerpApi place search
+deploy/render/            single-service Render backend image for demos
 docker-compose.yml        local eight-service topology
+render.yaml               Render Blueprint for the bootcamp backend
 ```
 
 ## Local setup
 
 ### 1. Install dependencies
 
-PowerShell commands are shown below. Python 3.11 or later and Node.js 20 or
+PowerShell commands are shown below. Python 3.11 or later and Node.js 22 or
 later are recommended.
 
 ```powershell
@@ -136,8 +142,14 @@ Set these private values:
   files.
 - A long random value in backend `TRIPWEAVER_API_KEYS` and the matching value
   in frontend `BACKEND_API_KEY` for authenticated local or production use.
-- Optional `TRIPWEAVER_DB_PATH` in `backend/.env` for account-backed history.
-  It defaults to a local SQLite file under `backend/data`.
+- Optional `TRIPWEAVER_DB_PATH` in `backend/.env` for local account-backed
+  history. It defaults to a local SQLite file under `backend/data`.
+- Optional `DATABASE_URL` in `backend/.env` or Render for Supabase/Postgres
+  account history. When set, it takes precedence over `TRIPWEAVER_DB_PATH`.
+- Optional `NEXT_PUBLIC_SUPABASE_URL` and
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `frontend/.env` or Vercel when
+  using Supabase browser/SSR helpers. These are publishable values, not the
+  private database URL.
 
 The itinerary, weather, and currency services do not require API keys. See
 [MCP_SETUP.md](./MCP_SETUP.md) for complete provider settings.
@@ -179,6 +191,14 @@ Each service has its own `Dockerfile`. The single-VM production topology in
 [DEPLOYMENT.md](./DEPLOYMENT.md) keeps MCP services private, persists account
 history, and replaces the earlier Railway-oriented deployment path.
 
+### Bootcamp Vercel + Render + Supabase
+
+For a zero-payment demo deployment, use
+[BOOTCAMP_DEPLOYMENT.md](./BOOTCAMP_DEPLOYMENT.md). That path deploys the
+Next.js frontend to Vercel, a single FastAPI backend to Render Free, and user
+history to Supabase Postgres. The Render backend uses `TRIPWEAVER_TOOL_MODE=local`
+so the travel tools run inside one service.
+
 ## Verification
 
 The provider tests mock HTTP responses and do not spend SerpApi credits.
@@ -200,8 +220,11 @@ npm --prefix frontend run build
 ## Production boundaries
 
 - LangGraph memory and rate limiting are in process. Account history uses
-  SQLite for local/dev. Use managed Postgres plus Redis-backed rate limits
-  before horizontal scaling.
+  SQLite for local/dev and can use Supabase/Postgres through `DATABASE_URL`.
+  Use managed Postgres plus Redis-backed rate limits before horizontal scaling.
+- `TRIPWEAVER_TOOL_MODE=local` is intended for the bootcamp/demo backend. The
+  full production topology should keep provider clients behind isolated MCP
+  services unless there is an explicit deployment reason to collapse them.
 - `book_hotel` and `book_flight` return explicit simulated confirmations.
 - Open-Meteo forecasts are limited to the provider's 16-day horizon.
 - The itinerary planner accepts trips up to 21 days and uses only supplied,
