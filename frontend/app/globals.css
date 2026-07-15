@@ -1,0 +1,367 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: rgba(255, 255, 255, 0.34);
+  --foreground: #14213d;
+  --card: rgba(255, 255, 255, 0.68);
+  --card-foreground: #14213d;
+  --popover: rgba(248, 251, 255, 0.9);
+  --popover-foreground: #14213d;
+  --primary: #163d63;
+  --primary-foreground: #f8fbff;
+  --secondary: rgba(221, 235, 247, 0.58);
+  --secondary-foreground: #173353;
+  --muted: rgba(235, 242, 249, 0.56);
+  --muted-foreground: #53647a;
+  --accent: rgba(198, 232, 239, 0.68);
+  --accent-foreground: #124f61;
+  --destructive: #b84352;
+  --border: rgba(255, 255, 255, 0.56);
+  --input: rgba(255, 255, 255, 0.52);
+  --ring: #197a92;
+  --chart-1: oklch(0.55 0.09 178);
+  --chart-2: oklch(0.62 0.12 220);
+  --chart-3: oklch(0.66 0.13 145);
+  --chart-4: oklch(0.7 0.13 70);
+  --chart-5: oklch(0.62 0.16 25);
+  --radius: 1rem;
+  --sidebar: rgba(248, 251, 255, 0.42);
+  --sidebar-foreground: #14213d;
+  --sidebar-primary: #163d63;
+  --sidebar-primary-foreground: #f8fbff;
+  --sidebar-accent: rgba(199, 232, 239, 0.66);
+  --sidebar-accent-foreground: #124f61;
+  --sidebar-border: rgba(255, 255, 255, 0.52);
+  --sidebar-ring: #197a92;
+  --tw-scene: url("/backgrounds/tripweaver-day-desktop.png");
+  --tw-scene-overlay: rgba(243, 248, 255, 0.1);
+  --tw-glass-panel: rgba(255, 255, 255, 0.38);
+  --tw-glass-panel-strong: rgba(255, 255, 255, 0.64);
+  --tw-glass-control: rgba(255, 255, 255, 0.48);
+  --tw-glass-border: rgba(255, 255, 255, 0.58);
+  --tw-glass-highlight: rgba(255, 255, 255, 0.54);
+  --tw-glass-shadow: 0 20px 65px rgba(38, 61, 124, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  --tw-glass-shadow-soft: 0 10px 32px rgba(42, 68, 130, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  --tw-scrollbar: rgba(27, 74, 101, 0.42);
+  color-scheme: light;
+}
+
+.dark {
+  --background: rgba(6, 17, 40, 0.42);
+  --foreground: #edf5ff;
+  --card: rgba(8, 20, 48, 0.7);
+  --card-foreground: #edf5ff;
+  --popover: rgba(7, 18, 44, 0.92);
+  --popover-foreground: #edf5ff;
+  --primary: #9ad8e5;
+  --primary-foreground: #07182c;
+  --secondary: rgba(35, 61, 97, 0.58);
+  --secondary-foreground: #eff7ff;
+  --muted: rgba(30, 51, 83, 0.58);
+  --muted-foreground: #aec0d8;
+  --accent: rgba(42, 99, 122, 0.62);
+  --accent-foreground: #effaff;
+  --destructive: #ff8792;
+  --border: rgba(150, 190, 255, 0.2);
+  --input: rgba(138, 180, 238, 0.16);
+  --ring: #77d1df;
+  --sidebar: rgba(7, 18, 46, 0.42);
+  --sidebar-foreground: #edf5ff;
+  --sidebar-primary: #9ad8e5;
+  --sidebar-primary-foreground: #07182c;
+  --sidebar-accent: rgba(37, 85, 108, 0.58);
+  --sidebar-accent-foreground: #effaff;
+  --sidebar-border: rgba(150, 190, 255, 0.2);
+  --sidebar-ring: #77d1df;
+  --tw-scene: url("/backgrounds/tripweaver-night-desktop.png");
+  --tw-scene-overlay: rgba(2, 8, 28, 0.2);
+  --tw-glass-panel: rgba(7, 18, 46, 0.42);
+  --tw-glass-panel-strong: rgba(8, 20, 48, 0.7);
+  --tw-glass-control: rgba(18, 39, 75, 0.58);
+  --tw-glass-border: rgba(150, 190, 255, 0.2);
+  --tw-glass-highlight: rgba(185, 215, 255, 0.12);
+  --tw-glass-shadow: 0 24px 72px rgba(0, 4, 20, 0.5), inset 0 1px 0 rgba(185, 215, 255, 0.12);
+  --tw-glass-shadow-soft: 0 12px 36px rgba(0, 4, 20, 0.34), inset 0 1px 0 rgba(185, 215, 255, 0.1);
+  --tw-scrollbar: rgba(156, 205, 235, 0.42);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-heading: var(--font-geist);
+  --font-sans: var(--font-geist);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    min-width: 320px;
+    background: #102949;
+  }
+
+  body {
+    @apply text-foreground;
+    min-width: 320px;
+    min-height: 100svh;
+    margin: 0;
+    letter-spacing: 0;
+    overflow: hidden;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  * {
+    scrollbar-color: var(--tw-scrollbar) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--tw-scrollbar);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .tw-app-background {
+    background-color: #c7d9ef;
+    background-image: linear-gradient(var(--tw-scene-overlay), var(--tw-scene-overlay)), var(--tw-scene);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  .tw-app-shell,
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-control,
+  .glass-card {
+    border: 1px solid var(--tw-glass-border);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .tw-app-shell,
+  .glass-panel {
+    background: var(--tw-glass-panel);
+    box-shadow: var(--tw-glass-shadow);
+  }
+
+  .glass-panel-strong,
+  .glass-card {
+    background: var(--tw-glass-panel-strong);
+    box-shadow: var(--tw-glass-shadow-soft);
+  }
+
+  .glass-control {
+    background: var(--tw-glass-control);
+    box-shadow: inset 0 1px 0 var(--tw-glass-highlight);
+  }
+
+  .glass-divider {
+    border-color: var(--tw-glass-border);
+  }
+
+  .glass-interactive {
+    transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease, transform 180ms ease;
+  }
+
+  .glass-interactive:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--ring) 42%, var(--tw-glass-border));
+    box-shadow: var(--tw-glass-shadow-soft);
+  }
+
+  .glass-interactive:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .brand-art {
+    mix-blend-mode: multiply;
+    filter: contrast(1.3);
+  }
+
+  .dark .brand-art {
+    mix-blend-mode: screen;
+    filter: invert(1) contrast(1.25);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --tw-scene: url("/backgrounds/tripweaver-day-mobile.png");
+  }
+
+  .dark {
+    --tw-scene: url("/backgrounds/tripweaver-night-mobile.png");
+  }
+}
+
+@media (min-width: 768px) {
+  .tw-app-background {
+    background-attachment: fixed;
+  }
+}
+
+.markdown > *:first-child {
+  margin-top: 0;
+}
+
+.markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown p {
+  margin: 0 0 0.75rem;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0.75rem 0;
+  padding-left: 1.4rem;
+}
+
+.markdown li {
+  margin: 0.35rem 0;
+}
+
+.markdown a {
+  color: #1b6d8f;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown code:not(.code-block code) {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--muted);
+  padding: 0.1em 0.3em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+}
+
+.code-block {
+  margin: 0.9rem 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--muted);
+}
+
+.code-block-group {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 0 0.8rem;
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.code-block-code {
+  overflow-x: auto;
+}
+
+.code-block-code pre {
+  margin: 0;
+  padding: 0.9rem;
+}
+
+.code-block-code code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: #2463a5;
+}
+
+.hljs-string,
+.hljs-attribute {
+  color: #247342;
+}
+
+.hljs-title,
+.hljs-function,
+.hljs-selector-class {
+  color: #7c4ba6;
+}
+
+.hljs-number,
+.hljs-literal {
+  color: #a34b1d;
+}
+
+.hljs-comment {
+  color: #71717a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

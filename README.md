@@ -1,156 +1,214 @@
-# TripWeaver ✈️
+# TripWeaver
 
-An MCP-based, intent-routed multi-agent travel planner. A traveller chats
-naturally; a LangGraph workflow routes to a General QA, Hotel, or Flight
-agent; each specialist reaches real external data (SerpApi) exclusively
-through its own MCP server. Built for the *MCP-Based Multi-Agent Travel
-Planner* Extension Sprint spec.
+TripWeaver is an intent-routed, multi-agent travel planning application. A
+Next.js workspace streams responses from a FastAPI and LangGraph backend. Each
+travel capability is isolated behind its own Model Context Protocol (MCP)
+service, so agents receive only the tools they are allowed to call.
 
-- **Architecture & every locked design decision:** [`SYSTEM.md`](./SYSTEM.md)
-- **Security model & threat table:** [`SECURITY.md`](./SECURITY.md)
-- **MCP server setup (SerpApi key, local run, deploy):** [`MCP_SETUP.md`](./MCP_SETUP.md)
+The application supports flight and hotel search, itinerary construction,
+weather forecasts, currency conversion, location resolution, and local place
+search. Booking tools are demonstrations only; TripWeaver never purchases or
+reserves travel.
+
+## Documentation
+
+- [System architecture](./SYSTEM.md)
+- [MCP setup and provider contracts](./MCP_SETUP.md)
+- [Security model](./SECURITY.md)
+- [Production deployment](./DEPLOYMENT.md)
+- [Frontend guide](./frontend/README.md)
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    U["Traveller"] -->|"chat"| FE["Gradio frontend"]
-    FE <-->|"SSE /chat/stream"| BE["FastAPI backend"]
-    BE --> G["LangGraph: classify_intent"]
-    G -->|"hotel"| HA["Hotel Agent"]
-    G -->|"flight"| FA["Flight Agent"]
-    G -->|"general_qa"| QA["General QA Agent"]
-    G -->|"clarify"| CL["Clarify"]
-    HA <-->|"MCP, scoped"| HM["hotel-mcp server"]
-    FA <-->|"MCP, scoped"| FM["flight-mcp server"]
-    HM <--> SP1["SerpApi Google Hotels"]
-    FM <--> SP2["SerpApi Google Flights"]
+flowchart LR
+    Browser[Browser] -->|HTTP| Web[Next.js frontend]
+    Web -->|server-side proxy + SSE| API[FastAPI backend]
+    API --> Graph[LangGraph router]
+
+    Graph --> General[General QA]
+    Graph --> Hotel[Hotel agent]
+    Graph --> Flight[Flight agent]
+    Graph --> Itinerary[Itinerary agent]
+    Graph --> Weather[Weather agent]
+    Graph --> Currency[Currency agent]
+    Graph --> Location[Location agent]
+
+    Hotel --> HMCP[hotel-mcp :8001]
+    Flight --> FMCP[flight-mcp :8002]
+    Itinerary --> LMCP[location-mcp :8006]
+    Itinerary --> IMCP[itinerary-mcp :8003]
+    Weather --> WMCP[weather-mcp :8004]
+    Currency --> CMCP[currency-mcp :8005]
+    Location --> LMCP
+
+    HMCP --> SerpApi[SerpApi]
+    FMCP --> SerpApi
+    LMCP --> SerpApi
+    LMCP --> OpenMeteoGeo[Open-Meteo geocoding]
+    WMCP --> OpenMeteo[Open-Meteo forecast]
+    CMCP --> Frankfurter[Frankfurter rates]
 ```
 
-Three independently deployable processes: **frontend** (Gradio), **backend**
-(FastAPI + LangGraph), **MCP servers** (`hotel-mcp`, `flight-mcp`). Agents
-never call SerpApi directly - only through their own server's MCP tools -
-so adding or swapping a travel data provider never touches agent code.
+The repository contains eight independently runnable services: the frontend,
+the backend, and six MCP servers. The backend is the only service that talks to
+OpenAI. The browser receives no OpenAI, SerpApi, or backend API secrets.
 
-## Features
+## Capabilities
 
-**Core (spec-required)**
-- Intent-routed LangGraph workflow (not a fixed linear path)
-- Real external data via MCP: Google Hotels + Google Flights search through SerpApi
-- Streaming responses, token-by-token, over SSE
-- Agent-activity visualisation (ROUTING / SEARCHING / BOOKING / RESPONDING
-  / CLARIFYING - a "departure board" ticker in the UI)
-- Graceful degradation: a dead MCP server never crashes the app
-- Follow-up questions for missing input, never guessed values
-- Travel-themed, responsive Gradio UI
+| Capability | Agent tools | Provider |
+| --- | --- | --- |
+| Hotels | `list_hotels`, `search_hotels`, `book_hotel` | SerpApi Google Hotels |
+| Flights | `list_flights`, `search_flights`, `book_flight` | SerpApi Google Flights |
+| Itinerary | `create_itinerary` | Deterministic local planner |
+| Weather | `get_current_weather`, `get_weather_forecast` | Open-Meteo |
+| Currency | `convert_currency`, `get_exchange_rate`, `list_supported_currencies` | Frankfurter |
+| Location | `resolve_location`, `search_places` | Open-Meteo and SerpApi Google Maps |
 
-**Added on top**
-- **Security**: API-key auth, per-identity rate limiting, three-layer input
-  validation, unguessable session ids, locked-down CORS (see `SECURITY.md`)
-- **Prompt-injection defence**: MCP tool results are fenced as untrusted
-  data and the model is explicitly told not to follow instructions
-  embedded in them
-- **Guardrails**: hard cap on tool-call rounds per turn, conversation
-  history trimming, result-count caps - all to keep cost and latency bounded
-- **Memory**: LangGraph `MemorySaver` gives free cross-turn context per
-  session ("make it cheaper" works without repeating the city and dates)
-- **UX**: quick-reply chips, copyable messages, a "New trip" reset, retry-
-  friendly error messages instead of stack traces
-- **Tests**: 70 offline tests (37 backend + 32 provider contracts + 1
-  repository-hygiene test) covering routing, graceful degradation, tool-loop
-  caps, SerpApi request mapping, normalization, validation, secret redaction,
-  and Docker secret exclusions (no API keys needed in CI)
+The frontend renders typed result views for flights, hotels, itineraries,
+weather, currency, and locations. It also includes guest conversation history,
+account-backed history for signed-in travellers, search, export/share,
+attachments, speech input where supported, trip context, quick actions,
+settings, responsive mobile sheets, and live service/tool state.
 
 ## Repository layout
 
-```
+```text
 backend/
-  main.py                 FastAPI app: /health, /session, /chat/stream (SSE)
-  agents/
-    entity.py              Shared LangGraph state schema
-    llm.py                 LLM factory (OpenAI)
-    prompts.py              System prompts + shared guardrails block
-    mcp_client.py            Resilient, per-server-scoped MCP tool loading
-    nodes.py                classify_intent / hotel / flight / general_qa / clarify
-    graph.py                 StateGraph wiring + MemorySaver checkpointer
-  core/security.py          Auth, rate limiting, input & session-id validation
-  tests/                    pytest suite (mocked LLM/tools, no network needed)
-mcp_servers/
-  hotel_mcp/                 list_hotels / search_hotels / book_hotel
-  flight_mcp/                 list_flights / search_flights / book_flight
+  agents/                 LangGraph state, routing, prompts, specialists, MCP adapter
+  api/                    FastAPI routes, schemas, and SSE normalization
+  core/                   auth, account storage, validation, and rate limiting
+  tests/                  backend unit and contract tests
 frontend/
-  app.py                     Gradio Blocks UI, SSE client
-  theme.py                   Colors, fonts, activity-ticker CSS
-docker-compose.yml            Run all four services together, locally
-SYSTEM.md / SECURITY.md / MCP_SETUP.md
+  app/                    Next.js routes and server-side API proxies
+  components/             shadcn/ui and TripWeaver workspace components
+  features/tripweaver/    stream reducer, conversations, trip context, types
+mcp_servers/
+  hotel_mcp/              SerpApi Google Hotels adapter
+  flight_mcp/             SerpApi Google Flights adapter
+  itinerary_mcp/          deterministic structured itinerary planner
+  weather_mcp/            Open-Meteo weather adapter
+  currency_mcp/           Frankfurter exchange-rate adapter
+  location_mcp/           geocoding and SerpApi place search
+docker-compose.yml        local eight-service topology
 ```
 
-## Quickstart (local)
+## Local setup
 
-```bash
-git clone <your-repo-url> tripweaver && cd tripweaver
+### 1. Install dependencies
 
-# 1. MCP servers (see MCP_SETUP.md for configuring a private SerpApi key)
-cd mcp_servers/hotel_mcp  && cp .env.example .env && pip install -r requirements.txt && python server.py &
-cd ../flight_mcp           && cp .env.example .env && pip install -r requirements.txt && python server.py &
-
-# 2. Backend
-cd ../../backend
-cp .env.example .env   # add OPENAI_API_KEY, set TRIPWEAVER_API_KEYS
-pip install -r requirements.txt
-uvicorn main:app --reload
-
-# 3. Frontend
-cd ../frontend
-cp .env.example .env   # BACKEND_API_KEY must match one value in TRIPWEAVER_API_KEYS
-pip install -r requirements.txt
-python app.py
-```
-
-Open http://localhost:7860. Or simply: `docker compose up --build`.
-
-## Deploying
-
-Deploy in this order - each step needs the previous step's URL:
-
-1. **`mcp_servers/hotel_mcp`** and **`mcp_servers/flight_mcp`** to Railway
-   (one service each, root directory set per service). Full steps in
-   `MCP_SETUP.md` section 8.
-2. **`backend`** to Railway, root directory `backend`. Set
-   `HOTEL_MCP_URL` / `FLIGHT_MCP_URL` to the two URLs from step 1,
-   `OPENAI_API_KEY`, `TRIPWEAVER_API_KEYS` (generate a long random string),
-   and `ALLOWED_ORIGINS` (you'll fill this in after step 3, then redeploy).
-3. **`frontend`** to Hugging Face Spaces, root = `frontend/`. Set
-   `BACKEND_URL` to the backend's Railway URL and `BACKEND_API_KEY` to one
-   of the values in `TRIPWEAVER_API_KEYS`.
-4. Go back to the backend's Railway variables and set `ALLOWED_ORIGINS` to
-   your Space's URL, then redeploy the backend so CORS actually allows it.
-
-## Testing
+PowerShell commands are shown below. Python 3.11 or later and Node.js 20 or
+later are recommended.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install -r backend\requirements.txt
+python -m pip install -r backend\requirements-dev.txt
+python -m pip install -r mcp_servers\hotel_mcp\requirements.txt
+python -m pip install -r mcp_servers\flight_mcp\requirements.txt
+python -m pip install -r mcp_servers\itinerary_mcp\requirements.txt
+python -m pip install -r mcp_servers\weather_mcp\requirements.txt
+python -m pip install -r mcp_servers\currency_mcp\requirements.txt
+python -m pip install -r mcp_servers\location_mcp\requirements.txt
+
+npm ci --prefix frontend
 ```
 
-70 tests pass offline: 37 backend tests mock LLM/MCP behavior, 32 provider
-tests use `httpx.MockTransport` so they consume no SerpApi credits, and one
-repository test verifies every Docker build context excludes local `.env`
-files. They cover routing, graceful degradation, tool-loop caps, provider
-request mapping, normalization, validation, and credential-safe failures.
-Every Python file is also compile-checked against the installed dependencies.
+### 2. Configure private environment files
 
-## Viva quick-reference
+Copy each example to `.env`. Never commit the resulting files.
 
-See `SYSTEM.md` for the full design rationale. Fast pointers into the code
-for the questions SRS section 11 says to expect:
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
+Copy-Item mcp_servers\hotel_mcp\.env.example mcp_servers\hotel_mcp\.env
+Copy-Item mcp_servers\flight_mcp\.env.example mcp_servers\flight_mcp\.env
+Copy-Item mcp_servers\location_mcp\.env.example mcp_servers\location_mcp\.env
+```
 
-- **MCP layer / decoupling** -> `agents/mcp_client.py` (`get_tools_for`),
-  `MCP_SETUP.md` section 9
-- **Intent routing / state** -> `agents/graph.py`, `agents/entity.py`
-- **Missing-input handling** -> `agents/prompts.py` (agent rules 1),
-  `clarify_node` in `agents/nodes.py`
-- **External-failure handling** -> `agents/mcp_client.py` (circuit breaker),
-  `_run_specialist`'s try/except in `agents/nodes.py`
-- **Streaming / activity cues** -> `main.py`'s `astream_events` bridge,
-  `frontend/app.py`'s SSE consumer
-- **Security** -> `SECURITY.md`
+Set these private values:
+
+- `OPENAI_API_KEY` in `backend/.env`.
+- The same `SERPAPI_API_KEY` in the hotel, flight, and location MCP `.env`
+  files.
+- A long random value in backend `TRIPWEAVER_API_KEYS` and the matching value
+  in frontend `BACKEND_API_KEY` for authenticated local or production use.
+- Optional `TRIPWEAVER_DB_PATH` in `backend/.env` for account-backed history.
+  It defaults to a local SQLite file under `backend/data`.
+
+The itinerary, weather, and currency services do not require API keys. See
+[MCP_SETUP.md](./MCP_SETUP.md) for complete provider settings.
+
+### 3. Start the services
+
+Open one terminal for each process from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe mcp_servers\hotel_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\flight_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\itinerary_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\weather_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\currency_mcp\server.py
+.\.venv\Scripts\python.exe mcp_servers\location_mcp\server.py
+.\.venv\Scripts\python.exe -m uvicorn main:app --app-dir backend --port 8000
+npm --prefix frontend run dev
+```
+
+Open:
+
+- Application: http://localhost:3000
+- Backend API docs: http://localhost:8000/docs
+- Aggregated health: http://localhost:8000/health
+
+The health response reports each MCP server independently. An available health
+endpoint means the process is reachable; a provider-backed search can still
+fail when its API key, quota, or upstream provider is unavailable.
+
+### Docker Compose
+
+After the same `.env` files exist, start the complete topology with:
+
+```powershell
+docker compose up --build
+```
+
+Each service has its own `Dockerfile`. The single-VM production topology in
+[DEPLOYMENT.md](./DEPLOYMENT.md) keeps MCP services private, persists account
+history, and replaces the earlier Railway-oriented deployment path.
+
+## Verification
+
+The provider tests mock HTTP responses and do not spend SerpApi credits.
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall backend mcp_servers frontend
+.\.venv\Scripts\python.exe -m pytest -q
+
+Push-Location backend
+..\.venv\Scripts\python.exe -m pytest -q
+Pop-Location
+
+npm --prefix frontend test
+npm --prefix frontend run lint
+npm --prefix frontend run typecheck
+npm --prefix frontend run build
+```
+
+## Production boundaries
+
+- LangGraph memory and rate limiting are in process. Account history uses
+  SQLite for local/dev. Use managed Postgres plus Redis-backed rate limits
+  before horizontal scaling.
+- `book_hotel` and `book_flight` return explicit simulated confirmations.
+- Open-Meteo forecasts are limited to the provider's 16-day horizon.
+- The itinerary planner accepts trips up to 21 days and uses only supplied,
+  provider-backed activities as named recommendations.
+- Frankfurter publishes a finite reference-currency set; unsupported currencies
+  return a controlled error.
+- Dependency ranges are not a deployment lock file. Produce and maintain exact
+  deployment locks before a production release.
+
+See [SYSTEM.md](./SYSTEM.md) for the request lifecycle, trust boundaries,
+failure behavior, and extension points.

@@ -7,6 +7,7 @@ private, side-channel state anywhere in the system. This is what SRS
 section 7 means by "the schema is the single source of truth for what one
 agent knows about another's work."
 """
+
 from __future__ import annotations
 
 from enum import Enum
@@ -18,9 +19,14 @@ from langgraph.graph.message import add_messages
 
 class Intent(str, Enum):
     """Output space of the router / classify_intent node (SRS section 2)."""
+
     GENERAL_QA = "general_qa"
     HOTEL = "hotel"
     FLIGHT = "flight"
+    ITINERARY = "itinerary"
+    WEATHER = "weather"
+    CURRENCY = "currency"
+    LOCATION = "location"
     CLARIFY = "clarify"
     END = "end"
 
@@ -28,6 +34,7 @@ class Intent(str, Enum):
 class ActivityState(str, Enum):
     """Mirrors SRS section 6 - Agent Activity & Tool-Call Lifecycle exactly,
     so the frontend's activity indicator is a 1:1 rendering of this enum."""
+
     ROUTING = "ROUTING"
     SEARCHING = "SEARCHING"
     BOOKING = "BOOKING"
@@ -37,6 +44,7 @@ class ActivityState(str, Enum):
 
 class ToolCallStatus(str, Enum):
     """Mirrors SRS section 6 - Tool-Call Status table."""
+
     INVOKED = "INVOKED"
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
@@ -44,7 +52,7 @@ class ToolCallStatus(str, Enum):
 
 class ToolCallRecord(TypedDict):
     tool_name: str
-    server: str  # "hotel-mcp" | "flight-mcp"
+    server: str
     status: ToolCallStatus
     detail: Optional[str]
 
