@@ -29,3 +29,4 @@ skills-lock.json
 *.log
 *.sqlite
 *.sqlite3
+.vercel
