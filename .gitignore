@@ -22,6 +22,8 @@ next-env.d.ts
 .DS_Store
 .vscode/
 .idea/
+.agents/
+skills-lock.json
 
 # Logs
 *.log

@@ -38,6 +38,24 @@ Use the pooled connection string when available. It usually starts with
 `postgresql://` and contains your database password. This value is the backend
 `DATABASE_URL`.
 
+If the database password contains special characters, use the Supabase-provided
+encoded connection string or percent-encode the password before pasting it into
+Render. After any database URL has been exposed in chat, reset the Supabase
+database password and use the new connection string only in Render.
+
+Copy the publishable browser values from:
+
+```text
+Supabase project -> Project Settings -> API
+```
+
+These values go in Vercel only:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+```
+
 Supabase is used here as managed Postgres storage for:
 
 - users
@@ -137,6 +155,8 @@ Set these Vercel environment variables:
 ```text
 BACKEND_URL=https://tripweaver-backend.onrender.com
 BACKEND_API_KEY=the same value used in Render TRIPWEAVER_API_KEYS
+NEXT_PUBLIC_SUPABASE_URL=your Supabase project URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your Supabase publishable key
 ```
 
 Deploy Vercel after Render is live.
