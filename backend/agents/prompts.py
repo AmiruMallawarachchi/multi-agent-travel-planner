@@ -35,12 +35,16 @@ general_qa   - destination advice, logistics, visas, and broad travel questions 
 hotel        - listing, searching, comparing, or booking accommodation
 flight       - listing, searching, comparing, or booking flights
 itinerary    - creating or revising a multi-day, day-by-day trip plan
-weather      - current conditions or a weather forecast for a place and optional dates
-currency     - exchange rates, supported currencies, or converting a monetary amount
+weather      - current conditions or a weather forecast for a place and optional dates.
+                If the traveller asks "weather", "forecast", "rain", "temperature",
+                or "next week" for a place, choose weather.
+currency     - exchange rates, supported currencies, or converting a monetary amount.
+                If the traveller asks "convert", "exchange rate", or names two currency
+                codes, choose currency.
 location     - finding attractions, restaurants, landmarks, or resolving a place location
 clarify      - the request is ambiguous between specialists, or references a prior result
                 you cannot resolve ("book the second one") without more context
-end          - the traveller is done (thanks, goodbye) and no further agent action is needed
+end          - the traveller is only saying thanks/goodbye and needs a short closing reply
 
 Reply with one label only."""
 

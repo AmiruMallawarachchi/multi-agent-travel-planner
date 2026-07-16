@@ -16,6 +16,8 @@ poisoning" - a well-known MCP-specific attack class.
 
 from __future__ import annotations
 
+from datetime import date
+
 from langchain_core.messages import SystemMessage
 
 from agents.entity import ActivityState, Intent, TripWeaverState
@@ -46,6 +48,14 @@ VALID_INTENTS = {i.value for i in Intent}
 MAX_RESULTS_SHOWN = 5
 
 
+def current_date_context() -> str:
+    today = date.today().isoformat()
+    return (
+        f"\n\nCurrent date: {today}. When the traveller gives a month/day without "
+        "a year, infer the next future occurrence. Do not invent past travel dates."
+    )
+
+
 def _recent_history(state: TripWeaverState) -> list:
     return recent_history(state)
 
@@ -56,7 +66,10 @@ async def classify_intent(state: TripWeaverState) -> dict:
     dispatches to the right specialist."""
     llm = get_router_llm()
     response = await llm.ainvoke(
-        [SystemMessage(content=INTENT_CLASSIFIER_PROMPT), *_recent_history(state)]
+        [
+            SystemMessage(content=f"{INTENT_CLASSIFIER_PROMPT}{current_date_context()}"),
+            *_recent_history(state),
+        ]
     )
     label = response.content.strip().lower()
     intent = Intent(label) if label in VALID_INTENTS else Intent.CLARIFY
@@ -66,13 +79,18 @@ async def classify_intent(state: TripWeaverState) -> dict:
 def route_from_intent(state: TripWeaverState) -> str:
     """Conditional-edge selector - pure function over state, no LLM call."""
     intent = state.get("intent")
+    if intent == Intent.END:
+        return Intent.GENERAL_QA.value
     return intent.value if intent else Intent.CLARIFY.value
 
 
 async def general_qa_node(state: TripWeaverState) -> dict:
     llm = get_agent_llm()
     response = await llm.ainvoke(
-        [SystemMessage(content=GENERAL_QA_SYSTEM_PROMPT), *_recent_history(state)]
+        [
+            SystemMessage(content=f"{GENERAL_QA_SYSTEM_PROMPT}{current_date_context()}"),
+            *_recent_history(state),
+        ]
     )
     return {
         "messages": [response],
@@ -156,7 +174,10 @@ async def location_node(state: TripWeaverState) -> dict:
 async def clarify_node(state: TripWeaverState) -> dict:
     llm = get_agent_llm()
     response = await llm.ainvoke(
-        [SystemMessage(content=CLARIFYING_PROMPT), *_recent_history(state)]
+        [
+            SystemMessage(content=f"{CLARIFYING_PROMPT}{current_date_context()}"),
+            *_recent_history(state),
+        ]
     )
     return {
         "messages": [response],
