@@ -106,6 +106,42 @@ def test_conversations_are_private_to_the_authenticated_user(monkeypatch, tmp_pa
     assert second_history.status_code == 200
     assert second_history.json()["conversations"] == []
 
+    second_trip = {
+        **conversation,
+        "id": "trip-2",
+        "title": "Paris plan",
+        "updatedAt": "2026-07-14T10:02:00.000Z",
+    }
+    assert (
+        client.put(
+            "/conversations/trip-2",
+            headers={"Authorization": f"Bearer {first['token']}"},
+            json={"conversation": second_trip},
+        ).status_code
+        == 200
+    )
+
+    deleted = client.delete(
+        "/conversations/trip-1",
+        headers={"Authorization": f"Bearer {first['token']}"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json() == {"ok": True, "deleted": True}
+    assert [
+        item["id"]
+        for item in client.get(
+            "/conversations",
+            headers={"Authorization": f"Bearer {first['token']}"},
+        ).json()["conversations"]
+    ] == ["trip-2"]
+    assert (
+        client.delete(
+            "/conversations/trip-2",
+            headers={"Authorization": f"Bearer {second['token']}"},
+        ).json()["deleted"]
+        is False
+    )
+
     cleared = client.delete(
         "/conversations", headers={"Authorization": f"Bearer {first['token']}"}
     )
@@ -128,6 +164,7 @@ def test_conversation_routes_require_account_session(monkeypatch, tmp_path):
         ).status_code
         == 401
     )
+    assert client.delete("/conversations/trip-1").status_code == 401
 
 
 def test_database_url_selects_postgres_sql(monkeypatch):

@@ -372,3 +372,16 @@ def clear_user_conversations(user_id: str) -> None:
         )
         connection.commit()
 
+
+def delete_user_conversation(user_id: str, conversation_id: str) -> bool:
+    normalized_id = conversation_id.strip()
+    if not normalized_id or len(normalized_id) > 128:
+        raise AccountError("Conversation id is required")
+    with _connect() as connection:
+        cursor = connection.execute(
+            _sql("DELETE FROM conversations WHERE user_id = ? AND id = ?"),
+            (user_id, normalized_id),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+

@@ -122,6 +122,7 @@ The backend exposes:
 | `GET /auth/me` | Return the signed-in traveller profile |
 | `GET /conversations` | List signed-in traveller conversations |
 | `PUT /conversations/{id}` | Save one signed-in traveller conversation |
+| `DELETE /conversations/{id}` | Delete one signed-in traveller conversation |
 | `DELETE /conversations` | Clear signed-in traveller conversations |
 | `POST /chat/stream` | Run one graph turn and stream normalized SSE events |
 | `GET /docs` | OpenAPI documentation |

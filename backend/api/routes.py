@@ -42,6 +42,7 @@ from core.accounts import (
     AccountUser,
     authenticate_user,
     clear_user_conversations,
+    delete_user_conversation,
     list_user_conversations,
     register_user,
     require_user,
@@ -141,6 +142,18 @@ async def save_conversation(
 async def clear_conversations(user: AccountUser = Depends(require_user)) -> dict[str, bool]:
     clear_user_conversations(user.id)
     return {"ok": True}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, bool]:
+    try:
+        deleted = delete_user_conversation(user.id, conversation_id)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
 
 
 @router.post("/chat/stream")

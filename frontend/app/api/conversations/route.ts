@@ -37,13 +37,15 @@ export async function PUT(request: Request) {
   return NextResponse.json(payload, { status: response.status })
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const token = await accountToken()
   if (!token) {
     return NextResponse.json({ ok: true })
   }
 
-  const response = await fetch(backendUrl("/conversations"), {
+  const id = new URL(request.url).searchParams.get("id")
+  const path = id ? `/conversations/${encodeURIComponent(id)}` : "/conversations"
+  const response = await fetch(backendUrl(path), {
     method: "DELETE",
     headers: backendHeaders(token),
   })
