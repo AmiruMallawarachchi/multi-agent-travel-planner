@@ -85,6 +85,14 @@ export interface Conversation {
   messages: ChatMessage[]
   tripContext: TripContext
   pinned?: boolean
+  planId?: string
+}
+
+export interface PlanFolder {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ServiceState {

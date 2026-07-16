@@ -6,7 +6,7 @@ import {
   History,
   LogIn,
   LogOut,
-  PanelLeft,
+  PanelRight,
   Settings2,
   UserPlus,
 } from "lucide-react"
@@ -106,7 +106,7 @@ export function AppHeader({
               aria-label="Toggle trip tools"
               aria-pressed={toolsOpen}
             >
-              <PanelLeft aria-hidden="true" />
+              <PanelRight aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Trip tools</TooltipContent>

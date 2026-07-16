@@ -159,7 +159,7 @@ function MessageBubble({
         {showToolActivity && message.tools?.length ? <ToolActivityPanel tools={message.tools} /> : null}
         <div
           className={cn(
-            "glass-card rounded-xl px-3.5 py-3 text-sm leading-[1.6] sm:px-4",
+            "tw-chat-surface rounded-xl px-3.5 py-3 text-sm leading-[1.6] sm:px-4",
             isUser
               ? "border-primary/20 bg-secondary/80 text-secondary-foreground"
               : "text-card-foreground",
@@ -356,7 +356,7 @@ export function ChatWorkspace({
   }
 
   return (
-    <section className="glass-panel-strong grid min-h-0 min-w-0 grid-rows-[50px_minmax(0,1fr)_auto] overflow-hidden rounded-xl">
+    <section className="tw-conversation-canvas grid min-h-0 min-w-0 grid-rows-[50px_minmax(0,1fr)_auto] overflow-hidden rounded-xl">
       <header className="glass-divider flex min-w-0 items-center gap-3 border-b px-3 sm:px-4">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase text-muted-foreground">Conversation</p>
@@ -394,7 +394,7 @@ export function ChatWorkspace({
         </div>
       </div>
 
-      <div className="glass-divider border-t bg-background/10 px-2.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
+      <div className="glass-divider border-t bg-transparent px-2.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
         <form className="mx-auto w-full max-w-[900px]" onSubmit={submit}>
           {attachments.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
@@ -419,7 +419,7 @@ export function ChatWorkspace({
             </div>
           ) : null}
 
-          <div className="glass-panel-strong rounded-xl p-1.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
+          <div className="tw-chat-surface rounded-xl p-1.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
             <Textarea
               aria-label="Message TripWeaver"
               placeholder="Type your message..."

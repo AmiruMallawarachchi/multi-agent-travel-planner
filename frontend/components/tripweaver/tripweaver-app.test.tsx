@@ -62,12 +62,15 @@ describe("TripWeaverApp", () => {
 
     expect(screen.getByText("TripWeaver")).toBeInTheDocument()
     expect(container.querySelector(".tw-app-background")).toBeInTheDocument()
+    expect(container.querySelector(".tw-conversation-canvas")).toBeInTheDocument()
     expect(container.querySelector('img[src*="tripweaver-mark"]')).toBeInTheDocument()
     expect(container.querySelector('img[src*="tripweaver-wordmark"]')).not.toBeInTheDocument()
     expect(screen.getByText("AI Trip Planning Assistant")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "SOL" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "LUNA" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Toggle conversation history" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "All chats" })).toBeInTheDocument()
+    expect(screen.getByText("Plans")).toBeInTheDocument()
     expect(screen.getByText("TripWeaver").tagName).toBe("SPAN")
     expect(screen.getByRole("button", { name: "Export or share conversation" })).toHaveTextContent(/^$/)
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
@@ -97,9 +100,12 @@ describe("TripWeaverApp", () => {
     await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
 
+    expect(screen.getByText("Plans")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
-    expect(screen.getByText("History")).toBeInTheDocument()
-    expect(window.localStorage.getItem("tripweaver.sidebars.v1")).toContain('"history":true')
+    expect(screen.queryByText("Plans")).not.toBeInTheDocument()
+    expect(window.localStorage.getItem("tripweaver.sidebars.v1")).toContain('"history":false')
+    await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
+    expect(screen.getByText("Plans")).toBeInTheDocument()
   })
 
   it("opens history and tools as modal drawers on compact screens", async () => {
@@ -181,13 +187,22 @@ describe("TripWeaverApp", () => {
     await user.click(screen.getByRole("button", { name: "Send message" }))
     await screen.findByText("I found two flight options.")
 
-    await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
     await user.type(screen.getByRole("searchbox", { name: "Search conversations" }), "Tokyo")
     expect(screen.getByRole("button", { name: /^Plan Tokyo,/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
     await user.click(screen.getByText("Pin conversation"))
     expect(screen.getByText("Pinned")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Create plan" }))
+    await user.type(screen.getByRole("textbox", { name: "Plan name" }), "Japan 2027")
+    await user.click(screen.getByRole("button", { name: "Create" }))
+    expect(screen.getByRole("button", { name: "Japan 2027, 0 chats" })).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
+    await user.hover(screen.getByText("Add to plan"))
+    await user.click(await screen.findByRole("menuitem", { name: "Japan 2027" }))
+    await user.keyboard("{Escape}")
 
     await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
     await user.click(screen.getByText("Rename conversation"))
@@ -288,6 +303,9 @@ describe("TripWeaverApp", () => {
         if (url.includes("/api/conversations")) {
           return Response.json({ conversations: [] })
         }
+        if (url.includes("/api/plans")) {
+          return Response.json({ plans: [] })
+        }
         return sseResponse(['{"type":"done"}'])
       }),
     )
@@ -308,6 +326,8 @@ describe("TripWeaverApp", () => {
 
     expect(await screen.findByText("Account created")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
+    await user.click(screen.getByRole("button", { name: "New chat" }))
+    expect(screen.getByText(/Welcome, Maya\. Hi, I am TripWeaver\./)).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       "/api/auth/register",
       expect.objectContaining({ method: "POST" }),
@@ -358,6 +378,18 @@ describe("TripWeaverApp", () => {
             ],
           })
         }
+        if (url.includes("/api/plans")) {
+          return Response.json({
+            plans: [
+              {
+                id: "japan-plan",
+                name: "Japan plans",
+                createdAt: "2026-07-14T09:00:00.000Z",
+                updatedAt: "2026-07-14T09:00:00.000Z",
+              },
+            ],
+          })
+        }
         return sseResponse(['{"type":"done"}'])
       }),
     )
@@ -365,8 +397,8 @@ describe("TripWeaverApp", () => {
     renderApp()
 
     expect(await screen.findByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
-    await userEvent.click(screen.getByRole("button", { name: "Toggle conversation history" }))
     expect(screen.getByRole("button", { name: /^Cloud Tokyo,/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Japan plans, 0 chats" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
   })
 })

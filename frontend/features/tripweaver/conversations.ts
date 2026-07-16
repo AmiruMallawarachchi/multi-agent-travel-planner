@@ -18,8 +18,14 @@ function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-export function createConversation(now = new Date(), id = createId()): Conversation {
+export function createConversation(
+  now = new Date(),
+  id = createId(),
+  travellerName?: string,
+): Conversation {
   const timestamp = now.toISOString()
+  const firstName = travellerName?.trim().split(/\s+/)[0]
+  const welcome = firstName ? `Welcome, ${firstName}. ${WELCOME_MESSAGE}` : WELCOME_MESSAGE
 
   return {
     id,
@@ -32,7 +38,7 @@ export function createConversation(now = new Date(), id = createId()): Conversat
       {
         id: `${id}-welcome`,
         role: "assistant",
-        content: WELCOME_MESSAGE,
+        content: welcome,
         createdAt: timestamp,
         quickReplies: {
           options: [
