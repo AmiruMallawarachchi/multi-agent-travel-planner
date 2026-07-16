@@ -66,6 +66,8 @@ async def classify_intent(state: TripWeaverState) -> dict:
 def route_from_intent(state: TripWeaverState) -> str:
     """Conditional-edge selector - pure function over state, no LLM call."""
     intent = state.get("intent")
+    if intent == Intent.END:
+        return Intent.GENERAL_QA.value
     return intent.value if intent else Intent.CLARIFY.value
 
 

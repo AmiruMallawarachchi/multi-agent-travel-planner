@@ -40,7 +40,7 @@ currency     - exchange rates, supported currencies, or converting a monetary am
 location     - finding attractions, restaurants, landmarks, or resolving a place location
 clarify      - the request is ambiguous between specialists, or references a prior result
                 you cannot resolve ("book the second one") without more context
-end          - the traveller is done (thanks, goodbye) and no further agent action is needed
+end          - the traveller is only saying thanks/goodbye and needs a short closing reply
 
 Reply with one label only."""
 
