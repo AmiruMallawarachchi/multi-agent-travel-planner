@@ -71,6 +71,8 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("button", { name: "Toggle conversation history" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "All chats" })).toBeInTheDocument()
     expect(screen.getByText("Plans")).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "TripWeaver waving hello" })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "TripWeaver ready to help" })).toBeInTheDocument()
     expect(screen.getByText("TripWeaver").tagName).toBe("SPAN")
     expect(screen.getByRole("button", { name: "Export or share conversation" })).toHaveTextContent(/^$/)
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
@@ -157,6 +159,9 @@ describe("TripWeaverApp", () => {
 
     await user.click(screen.getByRole("button", { name: "Flights" }))
 
+    expect(
+      screen.getByRole("img", { name: "TripWeaver celebrating your answer" }),
+    ).toBeInTheDocument()
     expect(await screen.findByText("I found two flight options.")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Flights" })).toBeDisabled()
     expect(fetch).toHaveBeenCalledWith(

@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react"
 import {
   ArrowUp,
-  Bot,
   Check,
   CircleX,
   Copy,
@@ -22,6 +21,10 @@ import { toast } from "sonner"
 
 import { Markdown } from "@/components/prompt-kit/markdown"
 import { QuickReplyQuestion } from "@/components/tripweaver/quick-reply-question"
+import {
+  mascotMoodForMessage,
+  TripWeaverMascot,
+} from "@/components/tripweaver/tripweaver-mascot"
 import {
   ItineraryDetails,
   StructuredResultPreview,
@@ -145,17 +148,27 @@ function MessageBubble({
 
   return (
     <article className={cn("flex items-start gap-2.5", isUser && "flex-row-reverse")}>
+      {isUser ? (
+        <div
+          className="glass-control mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+          aria-hidden="true"
+        >
+          <UserRound className="size-3.5" />
+        </div>
+      ) : (
+        <TripWeaverMascot
+          mood={mascotMoodForMessage(message)}
+          priority={message.id.endsWith("-welcome")}
+          className="mt-0.5 size-11 sm:size-12"
+        />
+      )}
+
       <div
         className={cn(
-          "glass-control mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-          !isUser && "border-primary/30 bg-accent/80 text-accent-foreground",
+          "min-w-0 max-w-[min(760px,calc(100%-3.5rem))]",
+          isUser && "max-w-[min(620px,82%)]",
         )}
-        aria-hidden="true"
       >
-        {isUser ? <UserRound className="size-3.5" /> : <Bot className="size-3.5" />}
-      </div>
-
-      <div className={cn("min-w-0 max-w-[min(760px,calc(100%-2.75rem))]", isUser && "max-w-[min(620px,82%)]") }>
         {showToolActivity && message.tools?.length ? <ToolActivityPanel tools={message.tools} /> : null}
         <div
           className={cn(
@@ -420,86 +433,94 @@ export function ChatWorkspace({
           ) : null}
 
           <div className="tw-chat-surface rounded-xl p-1.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
-            <Textarea
-              aria-label="Message TripWeaver"
-              placeholder="Type your message..."
-              className="max-h-32 min-h-11 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
-              disabled={isStreaming}
-              value={input}
-              onChange={(event) => onInputChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault()
-                  onSend()
-                }
-              }}
-            />
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="glass-interactive size-11 rounded-xl"
-                    aria-label="Attach file"
-                    asChild
-                  >
-                    <label>
-                      <Paperclip aria-hidden="true" />
-                      <input
-                        className="sr-only"
-                        type="file"
-                        accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
-                        aria-label="Attach a text file"
-                        onChange={(event) => {
-                          onAttachments(event.target.files)
-                          event.target.value = ""
-                        }}
-                      />
-                    </label>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Attach a text file</TooltipContent>
-              </Tooltip>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-1 sm:grid-cols-[48px_minmax(0,1fr)] sm:gap-1.5">
+              <TripWeaverMascot
+                mood={isStreaming ? "thinking" : "calm"}
+                className="size-11 sm:size-12"
+              />
+              <div className="min-w-0">
+                <Textarea
+                  aria-label="Message TripWeaver"
+                  placeholder="Type your message..."
+                  className="max-h-32 min-h-11 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  disabled={isStreaming}
+                  value={input}
+                  onChange={(event) => onInputChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault()
+                      onSend()
+                    }
+                  }}
+                />
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="glass-interactive size-11 rounded-xl"
+                        aria-label="Attach file"
+                        asChild
+                      >
+                        <label>
+                          <Paperclip aria-hidden="true" />
+                          <input
+                            className="sr-only"
+                            type="file"
+                            accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json"
+                            aria-label="Attach a text file"
+                            onChange={(event) => {
+                              onAttachments(event.target.files)
+                              event.target.value = ""
+                            }}
+                          />
+                        </label>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Attach a text file</TooltipContent>
+                  </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "glass-interactive size-11 rounded-xl",
+                          isListening && "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+                        )}
+                        onClick={onStartVoice}
+                        aria-label="Voice input"
+                      >
+                        <Mic aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{isListening ? "Listening" : "Voice input"}</TooltipContent>
+                  </Tooltip>
+
+                  <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
+                    {isListening ? "Listening..." : runtime.activity}
+                  </span>
+
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "glass-interactive size-11 rounded-xl",
-                      isListening && "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+                    type={isStreaming ? "button" : "submit"}
+                    size="icon-lg"
+                    className="glass-interactive ml-auto size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90"
+                    disabled={!isStreaming && !input.trim() && attachments.length === 0}
+                    aria-label={isStreaming ? "Stop generating" : "Send message"}
+                    onClick={isStreaming ? onStop : undefined}
+                  >
+                    {isStreaming ? (
+                      <Square className="size-3.5 fill-current" aria-hidden="true" />
+                    ) : (
+                      <ArrowUp aria-hidden="true" />
                     )}
-                    onClick={onStartVoice}
-                    aria-label="Voice input"
-                  >
-                    <Mic aria-hidden="true" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>{isListening ? "Listening" : "Voice input"}</TooltipContent>
-              </Tooltip>
-
-              <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
-                {isListening ? "Listening..." : runtime.activity}
-              </span>
-
-              <Button
-                type={isStreaming ? "button" : "submit"}
-                size="icon-lg"
-                className="glass-interactive ml-auto size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90"
-                disabled={!isStreaming && !input.trim() && attachments.length === 0}
-                aria-label={isStreaming ? "Stop generating" : "Send message"}
-                onClick={isStreaming ? onStop : undefined}
-              >
-                {isStreaming ? (
-                  <Square className="size-3.5 fill-current" aria-hidden="true" />
-                ) : (
-                  <ArrowUp aria-hidden="true" />
-                )}
-              </Button>
+                </div>
+              </div>
             </div>
           </div>
         </form>
