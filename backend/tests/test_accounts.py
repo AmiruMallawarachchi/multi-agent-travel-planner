@@ -167,6 +167,54 @@ def test_conversation_routes_require_account_session(monkeypatch, tmp_path):
     assert client.delete("/conversations/trip-1").status_code == 401
 
 
+def test_plans_are_private_and_deletion_unassigns_conversations(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    first = _register(client, "planner@example.com")
+    second = _register(client, "other@example.com")
+    first_headers = {"Authorization": f"Bearer {first['token']}"}
+    second_headers = {"Authorization": f"Bearer {second['token']}"}
+    plan = {
+        "id": "japan-plan",
+        "name": "Japan 2027",
+        "createdAt": "2026-07-16T08:00:00.000Z",
+        "updatedAt": "2026-07-16T08:00:00.000Z",
+    }
+
+    saved = client.put("/plans/japan-plan", headers=first_headers, json={"plan": plan})
+    assert saved.status_code == 200
+    assert saved.json()["plan"]["name"] == "Japan 2027"
+    assert client.get("/plans", headers=first_headers).json()["plans"] == [plan]
+    assert client.get("/plans", headers=second_headers).json()["plans"] == []
+
+    conversation = {
+        "id": "tokyo-chat",
+        "title": "Tokyo ideas",
+        "planId": "japan-plan",
+        "createdAt": "2026-07-16T08:01:00.000Z",
+        "updatedAt": "2026-07-16T08:01:00.000Z",
+        "messages": [],
+        "tripContext": {},
+    }
+    assert client.put(
+        "/conversations/tokyo-chat",
+        headers=first_headers,
+        json={"conversation": conversation},
+    ).status_code == 200
+
+    assert client.delete("/plans/japan-plan", headers=second_headers).json()["deleted"] is False
+    assert client.delete("/plans/japan-plan", headers=first_headers).json() == {
+        "ok": True,
+        "deleted": True,
+    }
+    assert client.get("/plans", headers=first_headers).json()["plans"] == []
+    stored_chat = client.get("/conversations", headers=first_headers).json()["conversations"][0]
+    assert "planId" not in stored_chat
+
+
+def test_plan_routes_require_account_session(monkeypatch, tmp_path):
+    assert _client(monkeypatch, tmp_path).get("/plans").status_code == 401
+
+
 def test_database_url_selects_postgres_sql(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example/postgres")
 

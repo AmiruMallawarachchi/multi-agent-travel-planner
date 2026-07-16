@@ -53,6 +53,14 @@ class ConversationsResponse(BaseModel):
     conversations: list[dict[str, Any]]
 
 
+class PlanSyncRequest(BaseModel):
+    plan: dict[str, Any]
+
+
+class PlansResponse(BaseModel):
+    plans: list[dict[str, Any]]
+
+
 class SessionEvent(BaseModel):
     type: Literal["session"] = "session"
     session_id: str

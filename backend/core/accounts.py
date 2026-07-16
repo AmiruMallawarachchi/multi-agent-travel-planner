@@ -145,6 +145,17 @@ def _ensure_schema(connection: _Connection) -> None:
             PRIMARY KEY (id, user_id)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS plans (
+            id TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (id, user_id)
+        )
+        """,
     )
     for statement in statements:
         connection.execute(statement)
@@ -382,6 +393,91 @@ def delete_user_conversation(user_id: str, conversation_id: str) -> bool:
             _sql("DELETE FROM conversations WHERE user_id = ? AND id = ?"),
             (user_id, normalized_id),
         )
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def list_user_plans(user_id: str) -> list[dict[str, Any]]:
+    with _connect() as connection:
+        rows = connection.execute(
+            _sql(
+            """
+            SELECT payload
+            FROM plans
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            ),
+            (user_id,),
+        ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+
+def upsert_user_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    plan_id = str(payload.get("id", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    created_at = str(payload.get("createdAt", _utc_now().isoformat()))
+    updated_at = str(payload.get("updatedAt", created_at))
+    if not plan_id or len(plan_id) > 128:
+        raise AccountError("Plan id is required")
+    if not name:
+        raise AccountError("Plan name is required")
+    if len(name) > 80:
+        raise AccountError("Plan name must be 80 characters or fewer")
+
+    normalized = {
+        **payload,
+        "id": plan_id,
+        "name": name,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+    }
+    serialized = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+    with _connect() as connection:
+        connection.execute(
+            _sql(
+            """
+            INSERT INTO plans (id, user_id, name, payload, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id, user_id) DO UPDATE SET
+                name = excluded.name,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            ),
+            (plan_id, user_id, name, serialized, created_at, updated_at),
+        )
+        connection.commit()
+    return normalized
+
+
+def delete_user_plan(user_id: str, plan_id: str) -> bool:
+    normalized_id = plan_id.strip()
+    if not normalized_id or len(normalized_id) > 128:
+        raise AccountError("Plan id is required")
+
+    with _connect() as connection:
+        cursor = connection.execute(
+            _sql("DELETE FROM plans WHERE user_id = ? AND id = ?"),
+            (user_id, normalized_id),
+        )
+        rows = connection.execute(
+            _sql("SELECT id, payload FROM conversations WHERE user_id = ?"),
+            (user_id,),
+        ).fetchall()
+        for row in rows:
+            payload = json.loads(row["payload"])
+            if payload.get("planId") != normalized_id:
+                continue
+            payload.pop("planId", None)
+            connection.execute(
+                _sql("UPDATE conversations SET payload = ? WHERE user_id = ? AND id = ?"),
+                (
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                    user_id,
+                    row["id"],
+                ),
+            )
         connection.commit()
         return cursor.rowcount > 0
 

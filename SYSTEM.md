@@ -91,6 +91,7 @@ Tailwind CSS, shadcn/ui, Radix primitives, and Lucide icons.
 Responsibilities:
 
 - maintain guest browser conversations, signed-in account history, and user settings
+- organize conversations into guest-local or account-backed plan folders
 - proxy chat and health calls from server routes so credentials stay server-side
 - parse backend SSE into deterministic reducer state
 - show agent and tool lifecycle status
@@ -124,6 +125,9 @@ The backend exposes:
 | `PUT /conversations/{id}` | Save one signed-in traveller conversation |
 | `DELETE /conversations/{id}` | Delete one signed-in traveller conversation |
 | `DELETE /conversations` | Clear signed-in traveller conversations |
+| `GET /plans` | List signed-in traveller plan folders |
+| `PUT /plans/{id}` | Save one signed-in traveller plan folder |
+| `DELETE /plans/{id}` | Delete a plan folder and unassign its conversations |
 | `POST /chat/stream` | Run one graph turn and stream normalized SSE events |
 | `GET /docs` | OpenAPI documentation |
 

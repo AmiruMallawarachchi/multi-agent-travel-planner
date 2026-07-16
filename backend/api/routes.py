@@ -18,6 +18,8 @@ from api.schemas import (
     ConversationsResponse,
     HealthResponse,
     LoginRequest,
+    PlanSyncRequest,
+    PlansResponse,
     RegisterRequest,
     SessionEvent,
     SessionResponse,
@@ -43,11 +45,14 @@ from core.accounts import (
     authenticate_user,
     clear_user_conversations,
     delete_user_conversation,
+    delete_user_plan,
     list_user_conversations,
+    list_user_plans,
     register_user,
     require_user,
     revoke_token,
     upsert_user_conversation,
+    upsert_user_plan,
 )
 
 logger = logging.getLogger("tripweaver")
@@ -151,6 +156,39 @@ async def delete_conversation(
 ) -> dict[str, bool]:
     try:
         deleted = delete_user_conversation(user.id, conversation_id)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
+
+
+@router.get("/plans", response_model=PlansResponse)
+async def plans(user: AccountUser = Depends(require_user)) -> PlansResponse:
+    return PlansResponse(plans=list_user_plans(user.id))
+
+
+@router.put("/plans/{plan_id}")
+async def save_plan(
+    plan_id: str,
+    payload: PlanSyncRequest,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, object]:
+    plan = payload.plan
+    if plan.get("id") != plan_id:
+        raise HTTPException(422, "Plan id does not match route")
+    try:
+        saved = upsert_user_plan(user.id, plan)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "plan": saved}
+
+
+@router.delete("/plans/{plan_id}")
+async def delete_plan(
+    plan_id: str,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, bool]:
+    try:
+        deleted = delete_user_plan(user.id, plan_id)
     except AccountError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"ok": True, "deleted": deleted}
