@@ -42,11 +42,14 @@ import type {
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
+import { cn } from "@/lib/utils"
 
 const DEFAULT_SETTINGS: TripWeaverSettings = {
   autoSave: true,
   showToolActivity: true,
 }
+
+const SIDEBAR_STORAGE_KEY = "tripweaver.sidebars.v1"
 
 interface AppState {
   conversations: Conversation[]
@@ -129,6 +132,8 @@ export function TripWeaverApp() {
   const [isListening, setIsListening] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [desktopHistoryOpen, setDesktopHistoryOpen] = useState(false)
+  const [desktopToolsOpen, setDesktopToolsOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [authMode, setAuthMode] = useState<AuthMode | null>(null)
@@ -169,6 +174,16 @@ export function TripWeaverApp() {
   useEffect(() => {
     const stored = parseStoredConversations(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))
     setSettings(parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY)))
+    try {
+      const sidebars = JSON.parse(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? "{}") as {
+        history?: boolean
+        tools?: boolean
+      }
+      if (typeof sidebars.history === "boolean") setDesktopHistoryOpen(sidebars.history)
+      if (typeof sidebars.tools === "boolean") setDesktopToolsOpen(sidebars.tools)
+    } catch {
+      window.localStorage.removeItem(SIDEBAR_STORAGE_KEY)
+    }
 
     if (stored.length > 0) {
       const sorted = stored.toSorted(
@@ -182,6 +197,14 @@ export function TripWeaverApp() {
     }
     hydratedRef.current = true
   }, [])
+
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      JSON.stringify({ history: desktopHistoryOpen, tools: desktopToolsOpen }),
+    )
+  }, [desktopHistoryOpen, desktopToolsOpen])
 
   useEffect(() => {
     void refreshAccount()
@@ -464,7 +487,13 @@ export function TripWeaverApp() {
         parsed.events.forEach((event) => applyEvent(conversationId, assistantMessageId, event))
       }
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        applyEvent(conversationId, assistantMessageId, {
+          type: "error",
+          message: "Response stopped.",
+        })
+        applyEvent(conversationId, assistantMessageId, { type: "done" })
+      } else {
         applyEvent(conversationId, assistantMessageId, {
           type: "error",
           message:
@@ -506,14 +535,111 @@ export function TripWeaverApp() {
 
   if (!activeConversation) return null
 
+  function isCompactViewport() {
+    return window.matchMedia("(max-width: 1023px)").matches
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (account) {
+      try {
+        const response = await fetch(`/api/conversations?id=${encodeURIComponent(conversationId)}`, {
+          method: "DELETE",
+        })
+        if (!response.ok) throw new Error("Delete failed")
+      } catch {
+        toast.error("Could not delete this conversation")
+        return
+      }
+    }
+
+    if (conversationId === state.activeConversationId) {
+      abortRef.current?.abort()
+    }
+    setState((current) => {
+      const remaining = current.conversations.filter(({ id }) => id !== conversationId)
+      const fallback = remaining[0] ?? createConversation()
+      return {
+        conversations: remaining.length > 0 ? remaining : [fallback],
+        activeConversationId:
+          current.activeConversationId === conversationId
+            ? fallback.id
+            : current.activeConversationId,
+        runtime:
+          current.activeConversationId === conversationId
+            ? resetRuntimeState(current.runtime)
+            : current.runtime,
+      }
+    })
+    toast.success("Conversation deleted")
+  }
+
+  function pinConversation(conversationId: string, pinned: boolean) {
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, pinned } : conversation,
+      ),
+    }))
+  }
+
+  function renameConversation(conversationId: string, title: string) {
+    const updatedAt = new Date().toISOString()
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, title, updatedAt } : conversation,
+      ),
+    }))
+  }
+
+  function answerQuickReply(messageId: string, value: string) {
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === current.activeConversationId
+          ? {
+              ...conversation,
+              messages: conversation.messages.map((message) =>
+                message.id === messageId && message.quickReplies
+                  ? {
+                      ...message,
+                      quickReplies: { ...message.quickReplies, answeredValue: value },
+                    }
+                  : message,
+              ),
+            }
+          : conversation,
+      ),
+    }))
+    void sendMessage(value)
+  }
+
+  function toggleHistory() {
+    if (isCompactViewport()) {
+      setHistoryOpen((open) => !open)
+      return
+    }
+    setDesktopHistoryOpen((open) => !open)
+  }
+
+  function toggleTools() {
+    if (isCompactViewport()) {
+      setStatusOpen((open) => !open)
+      return
+    }
+    setDesktopToolsOpen((open) => !open)
+  }
+
   const sidebar = (
     <ConversationSidebar
       activeConversationId={activeConversation.id}
       conversations={state.conversations}
       query={query}
-      onClear={clearConversations}
+      onDelete={(conversationId) => void deleteConversation(conversationId)}
       onNewChat={startNewChat}
+      onPin={pinConversation}
       onQueryChange={setQuery}
+      onRename={renameConversation}
       onSelect={selectConversation}
     />
   )
@@ -530,20 +656,38 @@ export function TripWeaverApp() {
   )
 
   return (
-    <main className="tw-app-background h-svh min-h-[560px] overflow-hidden p-1.5 sm:p-2.5 lg:p-3 xl:p-4">
-      <div className="tw-app-shell mx-auto grid h-full max-w-[1720px] grid-rows-[64px_minmax(0,1fr)] gap-2 overflow-hidden rounded-[22px] p-2 sm:grid-rows-[70px_minmax(0,1fr)] sm:gap-3 sm:p-3">
+    <main className="tw-app-background h-dvh min-h-[520px] overflow-hidden">
+      <div className="grid h-full w-full grid-rows-[56px_minmax(0,1fr)] gap-1.5 overflow-hidden p-1.5 sm:grid-rows-[58px_minmax(0,1fr)] sm:gap-2 sm:p-2">
         <AppHeader
           account={account}
           backendOnline={state.runtime.backendOnline}
+          historyOpen={desktopHistoryOpen || historyOpen}
+          toolsOpen={desktopToolsOpen || statusOpen}
           onOpenAuth={setAuthMode}
           onOpenHelp={() => setHelpOpen(true)}
-          onOpenHistory={() => setHistoryOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={() => void signOut()}
+          onToggleHistory={toggleHistory}
+          onToggleTools={toggleTools}
         />
 
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-          <div className="glass-panel hidden min-h-0 overflow-hidden rounded-[18px] lg:block">{sidebar}</div>
+        <div
+          className={cn(
+            "grid min-h-0 min-w-0 grid-cols-1 gap-1.5 transition-[grid-template-columns] duration-200 sm:gap-2",
+            desktopToolsOpen && desktopHistoryOpen &&
+              "lg:grid-cols-[280px_minmax(0,1fr)_280px]",
+            desktopToolsOpen && !desktopHistoryOpen &&
+              "lg:grid-cols-[280px_minmax(0,1fr)]",
+            !desktopToolsOpen && desktopHistoryOpen &&
+              "lg:grid-cols-[minmax(0,1fr)_280px]",
+            !desktopToolsOpen && !desktopHistoryOpen && "lg:grid-cols-[minmax(0,1fr)]",
+          )}
+        >
+          {desktopToolsOpen ? (
+            <div className="glass-panel hidden min-h-0 overflow-y-auto rounded-xl lg:block">
+              {statusPanel}
+            </div>
+          ) : null}
           <ChatWorkspace
             attachments={attachments}
             conversation={activeConversation}
@@ -554,16 +698,19 @@ export function TripWeaverApp() {
             showToolActivity={settings.showToolActivity}
             onAttachments={(files) => void attachFiles(files)}
             onInputChange={setInput}
-            onOpenStatus={() => setStatusOpen(true)}
+            onQuickReply={answerQuickReply}
             onRemoveAttachment={(attachmentId) =>
               setAttachments((current) => current.filter(({ id }) => id !== attachmentId))
             }
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
+            onStop={() => abortRef.current?.abort()}
           />
-          <div className="glass-panel hidden min-h-0 overflow-y-auto rounded-[18px] xl:block">
-            {statusPanel}
-          </div>
+          {desktopHistoryOpen ? (
+            <div className="glass-panel hidden min-h-0 overflow-hidden rounded-xl lg:block">
+              {sidebar}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -588,8 +735,10 @@ export function TripWeaverApp() {
       </Sheet>
 
       <SettingsDialog
+        historyCount={state.conversations.filter(hasUserMessage).length}
         open={settingsOpen}
         settings={settings}
+        onClearHistory={clearConversations}
         onOpenChange={setSettingsOpen}
         onSettingsChange={setSettings}
       />

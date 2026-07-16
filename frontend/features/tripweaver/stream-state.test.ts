@@ -150,4 +150,35 @@ describe("stream state", () => {
       preferences: ["food", "culture"],
     })
   })
+
+  it("attaches structured quick replies without changing text messages", () => {
+    const conversation = createConversation(
+      new Date("2026-07-13T08:00:00.000Z"),
+      "clarify",
+    )
+    conversation.messages.push({
+      id: "assistant-turn",
+      role: "assistant",
+      content: "How many people are travelling?",
+      createdAt: "2026-07-13T08:01:00.000Z",
+    })
+
+    const state = applyStreamEvent(
+      { conversation, runtime: createRuntimeState(true, AVAILABLE_SERVICES) },
+      "assistant-turn",
+      {
+        type: "quick_replies",
+        options: [{ id: "two", label: "2 people", value: "2 travellers" }],
+        allow_custom_answer: true,
+      },
+    )
+
+    expect(state.conversation.messages.at(-1)).toMatchObject({
+      content: "How many people are travelling?",
+      quickReplies: {
+        options: [{ id: "two", label: "2 people", value: "2 travellers" }],
+        allowCustomAnswer: true,
+      },
+    })
+  })
 })

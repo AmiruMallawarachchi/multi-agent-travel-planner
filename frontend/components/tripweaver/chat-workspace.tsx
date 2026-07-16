@@ -11,16 +11,17 @@ import {
   FileText,
   LoaderCircle,
   Mic,
-  PanelRight,
   Paperclip,
   Share2,
   Sparkles,
+  Square,
   UserRound,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Markdown } from "@/components/prompt-kit/markdown"
+import { QuickReplyQuestion } from "@/components/tripweaver/quick-reply-question"
 import {
   ItineraryDetails,
   StructuredResultPreview,
@@ -67,10 +68,11 @@ interface ChatWorkspaceProps {
   showToolActivity: boolean
   onAttachments: (files: FileList | null) => void
   onInputChange: (input: string) => void
-  onOpenStatus: () => void
+  onQuickReply: (messageId: string, value: string) => void
   onRemoveAttachment: (attachmentId: string) => void
   onSend: (message?: string) => void
   onStartVoice: () => void
+  onStop: () => void
 }
 
 function statusLabel(status: ToolActivity["status"]) {
@@ -80,8 +82,8 @@ function statusLabel(status: ToolActivity["status"]) {
 
 function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
   return (
-    <div className="glass-divider mb-3 overflow-hidden border-l-2 border-primary/45 bg-accent/15 text-card-foreground">
-      <div className="glass-divider flex h-10 items-center gap-2 border-b px-3 text-xs font-semibold">
+    <div className="glass-divider mb-2 overflow-hidden border-l-2 border-primary/45 bg-accent/15 text-card-foreground">
+      <div className="glass-divider flex h-9 items-center gap-2 border-b px-3 text-xs font-semibold">
         <Sparkles className="size-3.5 text-primary" aria-hidden="true" />
         Tool activity
       </div>
@@ -89,7 +91,7 @@ function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
         {tools.map((tool) => (
           <div
             key={tool.id}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 text-xs"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-xs"
           >
             <span className="min-w-0">
               <span className="block truncate font-medium">{tool.label}</span>
@@ -120,10 +122,14 @@ function MessageBubble({
   message,
   showToolActivity,
   onOpenItinerary,
+  onQuickReply,
+  quickRepliesDisabled,
 }: {
   message: ChatMessage
   showToolActivity: boolean
   onOpenItinerary: (message: ChatMessage, result?: StructuredResult) => void
+  onQuickReply: (messageId: string, value: string) => void
+  quickRepliesDisabled: boolean
 }) {
   const isUser = message.role === "user"
   const itineraryResult = message.results?.find((result) => result.type === "itinerary")
@@ -138,22 +144,22 @@ function MessageBubble({
   }
 
   return (
-    <article className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
+    <article className={cn("flex items-start gap-2.5", isUser && "flex-row-reverse")}>
       <div
         className={cn(
-          "glass-control mt-1 flex size-9 shrink-0 items-center justify-center rounded-full",
+          "glass-control mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
           !isUser && "border-primary/30 bg-accent/80 text-accent-foreground",
         )}
         aria-hidden="true"
       >
-        {isUser ? <UserRound className="size-4" /> : <Bot className="size-4" />}
+        {isUser ? <UserRound className="size-3.5" /> : <Bot className="size-3.5" />}
       </div>
 
-      <div className={cn("min-w-0 max-w-[720px]", isUser && "max-w-[620px]") }>
+      <div className={cn("min-w-0 max-w-[min(760px,calc(100%-2.75rem))]", isUser && "max-w-[min(620px,82%)]") }>
         {showToolActivity && message.tools?.length ? <ToolActivityPanel tools={message.tools} /> : null}
         <div
           className={cn(
-            "glass-card rounded-2xl px-4 py-3.5 text-sm leading-6",
+            "glass-card rounded-xl px-3.5 py-3 text-sm leading-[1.6] sm:px-4",
             isUser
               ? "border-primary/20 bg-secondary/80 text-secondary-foreground"
               : "text-card-foreground",
@@ -176,6 +182,16 @@ function MessageBubble({
                 />
               ))
             : null}
+
+          {!isUser && message.quickReplies?.options.length ? (
+            <QuickReplyQuestion
+              options={message.quickReplies.options}
+              allowCustomAnswer={message.quickReplies.allowCustomAnswer}
+              answeredValue={message.quickReplies.answeredValue}
+              disabled={quickRepliesDisabled}
+              onAnswer={(value) => onQuickReply(message.id, value)}
+            />
+          ) : null}
 
           {message.attachments?.length ? (
             <div className="glass-divider mt-3 flex flex-wrap gap-2 border-t pt-3">
@@ -274,7 +290,7 @@ function ConversationExport({ conversation }: { conversation: Conversation }) {
             <Button
               variant="outline"
               size="icon"
-              className="glass-control glass-interactive size-11 rounded-xl"
+              className="glass-control glass-interactive size-10 rounded-lg"
               aria-label="Export or share conversation"
             >
               <Share2 aria-hidden="true" />
@@ -312,21 +328,25 @@ export function ChatWorkspace({
   showToolActivity,
   onAttachments,
   onInputChange,
-  onOpenStatus,
+  onQuickReply,
   onRemoveAttachment,
   onSend,
   onStartVoice,
+  onStop,
 }: ChatWorkspaceProps) {
   const [itinerarySelection, setItinerarySelection] = useState<{
     message: ChatMessage
     result?: StructuredResult
   } | null>(null)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const messagesRef = useRef<HTMLDivElement | null>(null)
+  const shouldFollowRef = useRef(true)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView?.({
+    const messages = messagesRef.current
+    if (!messages || !shouldFollowRef.current) return
+    messages.scrollTo?.({
+      top: messages.scrollHeight,
       behavior: isStreaming ? "smooth" : "auto",
-      block: "end",
     })
   }, [conversation.messages, isStreaming])
 
@@ -336,7 +356,7 @@ export function ChatWorkspace({
   }
 
   return (
-    <section className="glass-panel-strong grid min-h-0 min-w-0 grid-rows-[58px_minmax(0,1fr)_auto] overflow-hidden rounded-[18px]">
+    <section className="glass-panel-strong grid min-h-0 min-w-0 grid-rows-[50px_minmax(0,1fr)_auto] overflow-hidden rounded-xl">
       <header className="glass-divider flex min-w-0 items-center gap-3 border-b px-3 sm:px-4">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase text-muted-foreground">Conversation</p>
@@ -345,20 +365,19 @@ export function ChatWorkspace({
         <span className="ml-auto hidden truncate text-xs text-muted-foreground lg:block">
           {runtime.activity}
         </span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="glass-control glass-interactive ml-auto size-11 rounded-xl xl:hidden"
-          onClick={onOpenStatus}
-          aria-label="Open trip status"
-        >
-          <PanelRight aria-hidden="true" />
-        </Button>
         <ConversationExport conversation={conversation} />
       </header>
 
-      <div className="min-h-0 overscroll-contain overflow-y-auto px-3 py-5 sm:px-5 md:px-6" aria-live="polite">
-        <div className="mx-auto flex w-full max-w-[900px] flex-col gap-5">
+      <div
+        ref={messagesRef}
+        className="min-h-0 overscroll-contain overflow-y-auto px-2.5 py-3 sm:px-4 md:px-5"
+        aria-live="polite"
+        onScroll={(event) => {
+          const target = event.currentTarget
+          shouldFollowRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 96
+        }}
+      >
+        <div className="mx-auto flex w-full max-w-[900px] flex-col gap-3.5">
           {conversation.messages.map((message) => (
             <MessageBubble
               key={message.id}
@@ -367,13 +386,15 @@ export function ChatWorkspace({
               onOpenItinerary={(selectedMessage, result) =>
                 setItinerarySelection({ message: selectedMessage, result })
               }
+              onQuickReply={onQuickReply}
+              quickRepliesDisabled={isStreaming}
             />
           ))}
-          <div ref={bottomRef} />
+          <div aria-hidden="true" />
         </div>
       </div>
 
-      <div className="glass-divider border-t bg-transparent px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
+      <div className="glass-divider border-t bg-background/10 px-2.5 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
         <form className="mx-auto w-full max-w-[900px]" onSubmit={submit}>
           {attachments.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2">
@@ -398,11 +419,11 @@ export function ChatWorkspace({
             </div>
           ) : null}
 
-          <div className="glass-panel-strong rounded-[20px] p-2 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
+          <div className="glass-panel-strong rounded-xl p-1.5 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25">
             <Textarea
               aria-label="Message TripWeaver"
               placeholder="Type your message..."
-              className="max-h-36 min-h-14 resize-none border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+              className="max-h-32 min-h-11 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
               disabled={isStreaming}
               value={input}
               onChange={(event) => onInputChange(event.target.value)}
@@ -466,14 +487,15 @@ export function ChatWorkspace({
               </span>
 
               <Button
-                type="submit"
+                type={isStreaming ? "button" : "submit"}
                 size="icon-lg"
-                className="glass-interactive ml-auto size-11 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90"
-                disabled={(!input.trim() && attachments.length === 0) || isStreaming}
-                aria-label="Send message"
+                className="glass-interactive ml-auto size-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90"
+                disabled={!isStreaming && !input.trim() && attachments.length === 0}
+                aria-label={isStreaming ? "Stop generating" : "Send message"}
+                onClick={isStreaming ? onStop : undefined}
               >
                 {isStreaming ? (
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  <Square className="size-3.5 fill-current" aria-hidden="true" />
                 ) : (
                   <ArrowUp aria-hidden="true" />
                 )}
@@ -481,7 +503,7 @@ export function ChatWorkspace({
             </div>
           </div>
         </form>
-        <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+        <p className="mt-1 text-center text-[10px] text-muted-foreground sm:text-[11px]">
           Travel availability and prices can change. Verify important details before booking.
         </p>
       </div>

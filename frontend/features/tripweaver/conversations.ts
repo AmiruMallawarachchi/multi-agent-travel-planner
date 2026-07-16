@@ -12,7 +12,7 @@ export const EMPTY_TRIP_CONTEXT: TripContext = {
 }
 
 const WELCOME_MESSAGE =
-  "Hi, I am TripWeaver. Tell me where you want to go, and I will help with travel ideas, hotels, flights, and booking steps."
+  "Hi, I am TripWeaver. Tell me where you want to go, and I will help with travel ideas, hotels, flights, and booking steps. What would you like to plan first?"
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -34,6 +34,14 @@ export function createConversation(now = new Date(), id = createId()): Conversat
         role: "assistant",
         content: WELCOME_MESSAGE,
         createdAt: timestamp,
+        quickReplies: {
+          options: [
+            { id: "start-flights", label: "Flights", value: "Help me search for flights." },
+            { id: "start-hotels", label: "Hotels", value: "Help me search for hotels." },
+            { id: "start-itinerary", label: "Itinerary", value: "Help me plan an itinerary." },
+          ],
+          allowCustomAnswer: true,
+        },
       },
     ],
   }

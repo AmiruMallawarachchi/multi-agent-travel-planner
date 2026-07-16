@@ -65,7 +65,9 @@ describe("TripWeaverApp", () => {
     expect(container.querySelector('img[src*="tripweaver-mark"]')).toBeInTheDocument()
     expect(container.querySelector('img[src*="tripweaver-wordmark"]')).not.toBeInTheDocument()
     expect(screen.getByText("AI Trip Planning Assistant")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "New chat" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "SOL" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "LUNA" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Toggle conversation history" })).toBeInTheDocument()
     expect(screen.getByText("TripWeaver").tagName).toBe("SPAN")
     expect(screen.getByRole("button", { name: "Export or share conversation" })).toHaveTextContent(/^$/)
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
@@ -83,20 +85,45 @@ describe("TripWeaverApp", () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole("button", { name: "Settings" }))
-    await user.click(screen.getByRole("switch", { name: "Dark appearance" }))
+    await user.click(screen.getByRole("button", { name: "LUNA" }))
 
     await waitFor(() => {
       expect(document.documentElement).toHaveClass("dark")
       expect(window.localStorage.getItem("tripweaver.theme")).toBe("dark")
     })
-    await user.click(screen.getByRole("button", { name: "Close settings" }))
 
-    await user.click(screen.getByRole("button", { name: "History" }))
+    await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))
+    expect(screen.queryByText("Active tools & status")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))
+    expect(screen.getByText("Active tools & status")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
+    expect(screen.getByText("History")).toBeInTheDocument()
+    expect(window.localStorage.getItem("tripweaver.sidebars.v1")).toContain('"history":true')
+  })
+
+  it("opens history and tools as modal drawers on compact screens", async () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: query.includes("max-width"),
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      })),
+    )
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
     expect(screen.getByRole("dialog", { name: "Conversation history" })).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Close" }))
+    await user.keyboard("{Escape}")
 
-    await user.click(screen.getByRole("button", { name: "Open trip status" }))
+    await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))
     expect(screen.getByRole("dialog", { name: "Trip status" })).toBeInTheDocument()
   })
 
@@ -118,7 +145,24 @@ describe("TripWeaverApp", () => {
     )
   })
 
-  it("supports settings, attachments, conversation search, and clearing history", async () => {
+  it("submits a structured quick reply once", async () => {
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(screen.getByRole("button", { name: "Flights" }))
+
+    expect(await screen.findByText("I found two flight options.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Flights" })).toBeDisabled()
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/chat",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("Help me search for flights."),
+      }),
+    )
+  })
+
+  it("supports settings, attachments, search, and individual history actions", async () => {
     const user = userEvent.setup()
     renderApp()
 
@@ -137,14 +181,28 @@ describe("TripWeaverApp", () => {
     await user.click(screen.getByRole("button", { name: "Send message" }))
     await screen.findByText("I found two flight options.")
 
+    await user.click(screen.getByRole("button", { name: "Toggle conversation history" }))
     await user.type(screen.getByRole("searchbox", { name: "Search conversations" }), "Tokyo")
-    expect(screen.getByRole("button", { name: /Plan Tokyo/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Plan Tokyo,/ })).toBeInTheDocument()
 
-    await user.click(screen.getByRole("button", { name: "Clear conversations" }))
-    expect(screen.getByRole("alertdialog", { name: "Clear all conversations?" })).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Clear all" }))
-    expect(screen.getByText("No conversations yet")).toBeInTheDocument()
-  })
+    await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
+    await user.click(screen.getByText("Pin conversation"))
+    expect(screen.getByText("Pinned")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
+    await user.click(screen.getByText("Rename conversation"))
+    const nameInput = screen.getByRole("textbox", { name: "Conversation name" })
+    await user.clear(nameInput)
+    await user.type(nameInput, "Tokyo escape")
+    await user.click(screen.getByRole("button", { name: "Rename" }))
+    expect(screen.getByRole("button", { name: /^Tokyo escape,/ })).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Actions for Tokyo escape" }))
+    await user.click(screen.getByText("Delete conversation"))
+    expect(screen.getByRole("alertdialog", { name: /Delete "Tokyo escape"/ })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Delete" }))
+    expect(screen.getByText("No matching conversations")).toBeInTheDocument()
+  }, 15_000)
 
   it("activates travel-intelligence quick actions and handles unsupported voice input", async () => {
     const user = userEvent.setup()
@@ -306,7 +364,9 @@ describe("TripWeaverApp", () => {
 
     renderApp()
 
-    expect(await screen.findByRole("button", { name: /Cloud Tokyo/ })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
+    await userEvent.click(screen.getByRole("button", { name: "Toggle conversation history" }))
+    expect(screen.getByRole("button", { name: /^Cloud Tokyo,/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
   })
 })

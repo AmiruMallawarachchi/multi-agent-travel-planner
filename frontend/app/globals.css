@@ -39,10 +39,10 @@
   --sidebar-ring: #197a92;
   --tw-scene: url("/backgrounds/tripweaver-day-desktop.png");
   --tw-scene-overlay: rgba(243, 248, 255, 0.1);
-  --tw-glass-panel: rgba(255, 255, 255, 0.38);
-  --tw-glass-panel-strong: rgba(255, 255, 255, 0.64);
-  --tw-glass-control: rgba(255, 255, 255, 0.48);
-  --tw-glass-border: rgba(255, 255, 255, 0.58);
+  --tw-glass-panel: rgba(255, 255, 255, 0.34);
+  --tw-glass-panel-strong: rgba(255, 255, 255, 0.5);
+  --tw-glass-control: rgba(255, 255, 255, 0.4);
+  --tw-glass-border: rgba(255, 255, 255, 0.48);
   --tw-glass-highlight: rgba(255, 255, 255, 0.54);
   --tw-glass-shadow: 0 20px 65px rgba(38, 61, 124, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.58);
   --tw-glass-shadow-soft: 0 10px 32px rgba(42, 68, 130, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.48);
@@ -79,9 +79,9 @@
   --sidebar-ring: #77d1df;
   --tw-scene: url("/backgrounds/tripweaver-night-desktop.png");
   --tw-scene-overlay: rgba(2, 8, 28, 0.2);
-  --tw-glass-panel: rgba(7, 18, 46, 0.42);
-  --tw-glass-panel-strong: rgba(8, 20, 48, 0.7);
-  --tw-glass-control: rgba(18, 39, 75, 0.58);
+  --tw-glass-panel: rgba(7, 18, 46, 0.34);
+  --tw-glass-panel-strong: rgba(8, 20, 48, 0.5);
+  --tw-glass-control: rgba(18, 39, 75, 0.46);
   --tw-glass-border: rgba(150, 190, 255, 0.2);
   --tw-glass-highlight: rgba(185, 215, 255, 0.12);
   --tw-glass-shadow: 0 24px 72px rgba(0, 4, 20, 0.5), inset 0 1px 0 rgba(185, 215, 255, 0.12);
@@ -145,7 +145,7 @@
   body {
     @apply text-foreground;
     min-width: 320px;
-    min-height: 100svh;
+    min-height: 100dvh;
     margin: 0;
     letter-spacing: 0;
     overflow: hidden;
@@ -193,8 +193,8 @@
   .glass-control,
   .glass-card {
     border: 1px solid var(--tw-glass-border);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
-    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    backdrop-filter: blur(10px) saturate(120%);
   }
 
   .tw-app-shell,
@@ -212,6 +212,8 @@
   .glass-control {
     background: var(--tw-glass-control);
     box-shadow: inset 0 1px 0 var(--tw-glass-highlight);
+    -webkit-backdrop-filter: blur(6px) saturate(115%);
+    backdrop-filter: blur(6px) saturate(115%);
   }
 
   .glass-divider {

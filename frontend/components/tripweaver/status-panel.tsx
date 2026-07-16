@@ -90,7 +90,7 @@ export function StatusPanel({
 }: StatusPanelProps) {
   return (
     <aside className={className} aria-label="Trip status">
-      <section className="p-4 lg:p-5" aria-labelledby="active-tools-heading">
+      <section className="p-3.5" aria-labelledby="active-tools-heading">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <h2 id="active-tools-heading" className="text-xs font-semibold uppercase">
@@ -109,7 +109,7 @@ export function StatusPanel({
 
       <Separator />
 
-      <section className="p-4 lg:p-5" aria-labelledby="trip-context-heading">
+      <section className="p-3.5" aria-labelledby="trip-context-heading">
         <h2 id="trip-context-heading" className="mb-4 text-xs font-semibold uppercase">
           Trip context
         </h2>
@@ -129,14 +129,14 @@ export function StatusPanel({
 
       <Separator />
 
-      <section className="p-4 lg:p-5" aria-labelledby="quick-actions-heading">
+      <section className="p-3.5" aria-labelledby="quick-actions-heading">
         <h2 id="quick-actions-heading" className="mb-3 text-xs font-semibold uppercase">
           Quick actions
         </h2>
         <div className="space-y-2">
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Help me search for flights.")}
             aria-label="Search flights"
           >
@@ -145,7 +145,7 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Help me search for hotels.")}
             aria-label="Search hotels"
           >
@@ -154,7 +154,7 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Plan a day-by-day itinerary for my trip.")}
             aria-label="Plan itinerary"
           >
@@ -163,7 +163,7 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Check the weather for my trip.")}
             aria-label="Check weather"
           >
@@ -172,7 +172,7 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Convert currency for my trip.")}
             aria-label="Convert currency"
           >
@@ -181,7 +181,7 @@ export function StatusPanel({
           </Button>
           <Button
             variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
+            className="glass-control glass-interactive h-10 w-full justify-start rounded-lg"
             onClick={() => onQuickAction("Find attractions and restaurants near my destination.")}
             aria-label="Find places"
           >
