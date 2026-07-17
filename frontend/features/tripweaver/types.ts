@@ -54,6 +54,9 @@ export interface QuickReplyOption {
 export interface QuickReplies {
   options: QuickReplyOption[]
   allowCustomAnswer?: boolean
+  questionId?: string
+  step?: number
+  totalSteps?: number
   answeredValue?: string
 }
 

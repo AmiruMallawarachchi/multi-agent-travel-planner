@@ -29,6 +29,7 @@ NODE_ACTIVITY = {
     "weather": ActivityState.SEARCHING.value,
     "currency": ActivityState.SEARCHING.value,
     "location": ActivityState.SEARCHING.value,
+    "trip_budget": ActivityState.CLARIFYING.value,
     "clarify": ActivityState.CLARIFYING.value,
 }
 RESPONSE_NODES = frozenset(NODE_ACTIVITY) - {"classify_intent"}
@@ -139,12 +140,54 @@ def quick_replies_for_text(content: str) -> QuickRepliesEvent | None:
     return QuickRepliesEvent(options=options)
 
 
+def _guided_quick_replies(output: Any) -> tuple[str, QuickRepliesEvent] | None:
+    if not isinstance(output, dict):
+        return None
+    messages = output.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+    message = messages[-1]
+    metadata = getattr(message, "additional_kwargs", {}).get(
+        "tripweaver_quick_replies"
+    )
+    if not isinstance(metadata, dict):
+        return None
+    content = chunk_text(getattr(message, "content", ""))
+    return content, QuickRepliesEvent.model_validate(
+        {
+            "options": metadata.get("options", []),
+            "allow_custom_answer": metadata.get("allow_custom_answer", True),
+            "question_id": metadata.get("question_id"),
+            "step": metadata.get("step"),
+            "total_steps": metadata.get("total_steps"),
+        }
+    )
+
+
 def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEvent]:
     kind = event.get("event", "")
     name = event.get("name", "")
 
     if kind == "on_chain_start" and name in NODE_ACTIVITY:
         yield StatusEvent(state=NODE_ACTIVITY[name], node=name)
+        return
+
+    if kind == "on_chain_end" and name == "trip_budget":
+        guided = _guided_quick_replies(event.get("data", {}).get("output"))
+        if guided:
+            content, quick_replies = guided
+            if content:
+                yield TokenEvent(content=content)
+            yield quick_replies
+        return
+
+    if kind == "on_chat_model_start":
+        graph_node = event.get("metadata", {}).get("langgraph_node")
+        if graph_node == "trip_budget":
+            yield StatusEvent(
+                state=ActivityState.RESPONDING.value,
+                node="trip_budget",
+            )
         return
 
     if kind == "on_tool_start":
@@ -190,7 +233,11 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
         if getattr(output, "tool_calls", None):
             return
         content = chunk_text(getattr(output, "content", ""))
-        quick_replies = quick_replies_for_text(content)
+        quick_replies = (
+            None
+            if graph_node == "trip_budget"
+            else quick_replies_for_text(content)
+        )
         if quick_replies:
             yield quick_replies
 

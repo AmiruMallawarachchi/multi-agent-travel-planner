@@ -200,6 +200,8 @@ function MessageBubble({
             <QuickReplyQuestion
               options={message.quickReplies.options}
               allowCustomAnswer={message.quickReplies.allowCustomAnswer}
+              step={message.quickReplies.step}
+              totalSteps={message.quickReplies.totalSteps}
               answeredValue={message.quickReplies.answeredValue}
               disabled={quickRepliesDisabled}
               onAnswer={(value) => onQuickReply(message.id, value)}

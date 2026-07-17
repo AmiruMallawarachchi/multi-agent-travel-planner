@@ -274,6 +274,9 @@ export function applyStreamEvent(
               quickReplies: {
                 options: event.options,
                 allowCustomAnswer: event.allow_custom_answer,
+                questionId: event.question_id,
+                step: event.step,
+                totalSteps: event.total_steps,
               },
             }
           : message,

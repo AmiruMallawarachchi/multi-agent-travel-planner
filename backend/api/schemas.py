@@ -106,6 +106,9 @@ class QuickRepliesEvent(BaseModel):
     type: Literal["quick_replies"] = "quick_replies"
     options: list[QuickReplyOption]
     allow_custom_answer: bool = True
+    question_id: str | None = None
+    step: int | None = Field(default=None, ge=1)
+    total_steps: int | None = Field(default=None, ge=1)
 
 
 class ErrorEvent(BaseModel):
