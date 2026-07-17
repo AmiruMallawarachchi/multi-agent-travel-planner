@@ -26,6 +26,11 @@ import {
   parseStoredConversations,
 } from "@/features/tripweaver/conversations"
 import {
+  PLANS_STORAGE_KEY,
+  createPlanFolder,
+  parseStoredPlans,
+} from "@/features/tripweaver/plans"
+import {
   applyStreamEvent,
   createRuntimeState,
   resetRuntimeState,
@@ -39,17 +44,24 @@ import type {
   Conversation,
   RuntimeState,
   McpServerStatuses,
+  PlanFolder,
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
+import { cn } from "@/lib/utils"
+import { readJsonObject } from "@/lib/http-response"
+import { createClient as createSupabaseClient } from "@/lib/client"
 
 const DEFAULT_SETTINGS: TripWeaverSettings = {
   autoSave: true,
   showToolActivity: true,
 }
 
+const SIDEBAR_STORAGE_KEY = "tripweaver.sidebars.v1"
+
 interface AppState {
   conversations: Conversation[]
+  plans: PlanFolder[]
   activeConversationId: string
   runtime: RuntimeState
 }
@@ -83,6 +95,7 @@ function createInitialState(): AppState {
   const conversation = createConversation()
   return {
     conversations: [conversation],
+    plans: [],
     activeConversationId: conversation.id,
     runtime: createRuntimeState(false),
   }
@@ -129,6 +142,8 @@ export function TripWeaverApp() {
   const [isListening, setIsListening] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [desktopHistoryOpen, setDesktopHistoryOpen] = useState(true)
+  const [desktopToolsOpen, setDesktopToolsOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [authMode, setAuthMode] = useState<AuthMode | null>(null)
@@ -140,16 +155,27 @@ export function TripWeaverApp() {
   const activeConversation =
     state.conversations.find(({ id }) => id === state.activeConversationId) ?? state.conversations[0]
 
-  const loadAccountConversations = useCallback(async () => {
-    const response = await fetch("/api/conversations", { cache: "no-store" })
-    if (!response.ok) return
-    const data = (await response.json()) as { conversations?: unknown[] }
-    const cloud = parseStoredConversations(JSON.stringify(data.conversations ?? []))
-    if (cloud.length === 0) return
+  const loadAccountWorkspace = useCallback(async (travellerName?: string) => {
+    const [conversationResponse, planResponse] = await Promise.all([
+      fetch("/api/conversations", { cache: "no-store" }),
+      fetch("/api/plans", { cache: "no-store" }),
+    ])
+    if (!conversationResponse.ok || !planResponse.ok) return
+    const conversationData = (await conversationResponse.json()) as { conversations?: unknown[] }
+    const planData = (await planResponse.json()) as { plans?: unknown[] }
+    const cloudConversations = parseStoredConversations(
+      JSON.stringify(conversationData.conversations ?? []),
+    )
+    const cloudPlans = parseStoredPlans(JSON.stringify(planData.plans ?? []))
+    const accountConversations =
+      cloudConversations.length > 0
+        ? cloudConversations
+        : [createConversation(new Date(), undefined, travellerName)]
     setState((current) => ({
       ...current,
-      conversations: cloud,
-      activeConversationId: cloud[0].id,
+      conversations: accountConversations,
+      plans: cloudPlans,
+      activeConversationId: accountConversations[0].id,
       runtime: resetRuntimeState(current.runtime),
     }))
   }, [])
@@ -160,15 +186,26 @@ export function TripWeaverApp() {
       if (!response.ok) return
       const user = (await response.json()) as AccountUser
       setAccount(user)
-      await loadAccountConversations()
+      await loadAccountWorkspace(user.name)
     } catch {
       setAccount(null)
     }
-  }, [loadAccountConversations])
+  }, [loadAccountWorkspace])
 
   useEffect(() => {
     const stored = parseStoredConversations(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))
+    const storedPlans = parseStoredPlans(window.localStorage.getItem(PLANS_STORAGE_KEY))
     setSettings(parseSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY)))
+    try {
+      const sidebars = JSON.parse(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) ?? "{}") as {
+        history?: boolean
+        tools?: boolean
+      }
+      if (typeof sidebars.history === "boolean") setDesktopHistoryOpen(sidebars.history)
+      if (typeof sidebars.tools === "boolean") setDesktopToolsOpen(sidebars.tools)
+    } catch {
+      window.localStorage.removeItem(SIDEBAR_STORAGE_KEY)
+    }
 
     if (stored.length > 0) {
       const sorted = stored.toSorted(
@@ -177,25 +214,53 @@ export function TripWeaverApp() {
       setState((current) => ({
         ...current,
         conversations: sorted,
+        plans: storedPlans,
         activeConversationId: sorted[0].id,
       }))
+    } else if (storedPlans.length > 0) {
+      setState((current) => ({ ...current, plans: storedPlans }))
     }
     hydratedRef.current = true
   }, [])
+
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      JSON.stringify({ history: desktopHistoryOpen, tools: desktopToolsOpen }),
+    )
+  }, [desktopHistoryOpen, desktopToolsOpen])
 
   useEffect(() => {
     void refreshAccount()
   }, [refreshAccount])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authError = params.get("auth_error")
+    const authSuccess = params.get("auth")
+    if (authError === "google") {
+      toast.error("Google sign in could not be completed. Please try again.")
+      setAuthMode("login")
+    } else if (authSuccess === "google") {
+      toast.success("Signed in with Google")
+    } else {
+      return
+    }
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [])
+
+  useEffect(() => {
     if (!hydratedRef.current) return
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
     if (settings.autoSave) {
       window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(state.conversations))
+      window.localStorage.setItem(PLANS_STORAGE_KEY, JSON.stringify(state.plans))
     } else {
       window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY)
+      window.localStorage.removeItem(PLANS_STORAGE_KEY)
     }
-  }, [settings, state.conversations])
+  }, [settings, state.conversations, state.plans])
 
   useEffect(() => {
     if (!hydratedRef.current || !account) return
@@ -203,9 +268,10 @@ export function TripWeaverApp() {
       state.conversations
         .filter(hasUserMessage)
         .forEach((conversation) => void saveAccountConversation(conversation))
+      state.plans.forEach((plan) => void saveAccountPlan(plan))
     }, 500)
     return () => window.clearTimeout(timeout)
-  }, [account, state.conversations])
+  }, [account, state.conversations, state.plans])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -252,8 +318,9 @@ export function TripWeaverApp() {
   function startNewChat() {
     abortRef.current?.abort()
     recognitionRef.current?.stop()
-    const conversation = createConversation()
+    const conversation = createConversation(new Date(), undefined, account?.name)
     setState((current) => ({
+      ...current,
       conversations: [conversation, ...current.conversations.filter(hasUserMessage)],
       activeConversationId: conversation.id,
       runtime: resetRuntimeState(current.runtime),
@@ -266,12 +333,13 @@ export function TripWeaverApp() {
 
   function clearConversations() {
     abortRef.current?.abort()
-    const conversation = createConversation()
+    const conversation = createConversation(new Date(), undefined, account?.name)
     window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY)
     if (account) {
       void fetch("/api/conversations", { method: "DELETE" })
     }
     setState((current) => ({
+      ...current,
       conversations: [conversation],
       activeConversationId: conversation.id,
       runtime: resetRuntimeState(current.runtime),
@@ -294,6 +362,18 @@ export function TripWeaverApp() {
     }
   }
 
+  async function saveAccountPlan(plan: PlanFolder) {
+    try {
+      await fetch("/api/plans", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      })
+    } catch {
+      // A failed background sync should not interrupt trip planning.
+    }
+  }
+
   async function authenticate(
     mode: AuthMode,
     payload: { email: string; password: string; name?: string },
@@ -303,20 +383,45 @@ export function TripWeaverApp() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
-    const body = (await response.json()) as { user?: AccountUser; detail?: string }
-    if (!response.ok || !body.user) {
-      throw new Error(body.detail ?? "Could not authenticate")
+    const body = await readJsonObject(response)
+    const user = body.user as AccountUser | undefined
+    if (!response.ok || !user) {
+      throw new Error(
+        typeof body.detail === "string"
+          ? body.detail
+          : "The account service is temporarily unavailable. Please try again.",
+      )
     }
-    setAccount(body.user)
+    setAccount(user)
     setAuthMode(null)
     toast.success(mode === "register" ? "Account created" : "Signed in")
-    await loadAccountConversations()
+    await loadAccountWorkspace(user.name)
+  }
+
+  async function signInWithGoogle() {
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
+      throw new Error("Google sign in is not configured for this deployment")
+    }
+    const { error } = await createSupabaseClient().auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) throw new Error(error.message)
   }
 
   async function signOut() {
     abortRef.current?.abort()
     recognitionRef.current?.stop()
     await fetch("/api/auth/logout", { method: "POST" })
+    if (
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
+      await createSupabaseClient().auth.signOut({ scope: "local" })
+    }
     setAccount(null)
     setState(createInitialState())
     setInput("")
@@ -464,7 +569,13 @@ export function TripWeaverApp() {
         parsed.events.forEach((event) => applyEvent(conversationId, assistantMessageId, event))
       }
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        applyEvent(conversationId, assistantMessageId, {
+          type: "error",
+          message: "Response stopped.",
+        })
+        applyEvent(conversationId, assistantMessageId, { type: "done" })
+      } else {
         applyEvent(conversationId, assistantMessageId, {
           type: "error",
           message:
@@ -506,44 +617,208 @@ export function TripWeaverApp() {
 
   if (!activeConversation) return null
 
+  function isCompactViewport() {
+    return window.matchMedia("(max-width: 1023px)").matches
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (account) {
+      try {
+        const response = await fetch(`/api/conversations?id=${encodeURIComponent(conversationId)}`, {
+          method: "DELETE",
+        })
+        if (!response.ok) throw new Error("Delete failed")
+      } catch {
+        toast.error("Could not delete this conversation")
+        return
+      }
+    }
+
+    if (conversationId === state.activeConversationId) {
+      abortRef.current?.abort()
+    }
+    setState((current) => {
+      const remaining = current.conversations.filter(({ id }) => id !== conversationId)
+      const fallback = remaining[0] ?? createConversation(new Date(), undefined, account?.name)
+      return {
+        ...current,
+        conversations: remaining.length > 0 ? remaining : [fallback],
+        activeConversationId:
+          current.activeConversationId === conversationId
+            ? fallback.id
+            : current.activeConversationId,
+        runtime:
+          current.activeConversationId === conversationId
+            ? resetRuntimeState(current.runtime)
+            : current.runtime,
+      }
+    })
+    toast.success("Conversation deleted")
+  }
+
+  function pinConversation(conversationId: string, pinned: boolean) {
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, pinned } : conversation,
+      ),
+    }))
+  }
+
+  function renameConversation(conversationId: string, title: string) {
+    const updatedAt = new Date().toISOString()
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, title, updatedAt } : conversation,
+      ),
+    }))
+  }
+
+  function createPlan(name: string) {
+    const plan = createPlanFolder(name)
+    setState((current) => ({ ...current, plans: [plan, ...current.plans] }))
+    toast.success(`Created ${plan.name}`)
+  }
+
+  function renamePlan(planId: string, name: string) {
+    const updatedAt = new Date().toISOString()
+    setState((current) => ({
+      ...current,
+      plans: current.plans.map((plan) =>
+        plan.id === planId ? { ...plan, name, updatedAt } : plan,
+      ),
+    }))
+  }
+
+  async function deletePlan(planId: string) {
+    if (account) {
+      try {
+        const response = await fetch(`/api/plans?id=${encodeURIComponent(planId)}`, {
+          method: "DELETE",
+        })
+        if (!response.ok) throw new Error("Delete failed")
+      } catch {
+        toast.error("Could not delete this plan")
+        return
+      }
+    }
+    setState((current) => ({
+      ...current,
+      plans: current.plans.filter((plan) => plan.id !== planId),
+      conversations: current.conversations.map((conversation) =>
+        conversation.planId === planId
+          ? { ...conversation, planId: undefined }
+          : conversation,
+      ),
+    }))
+    toast.success("Plan deleted")
+  }
+
+  function assignConversationToPlan(conversationId: string, planId?: string) {
+    const updatedAt = new Date().toISOString()
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, planId, updatedAt } : conversation,
+      ),
+    }))
+  }
+
+  function answerQuickReply(messageId: string, value: string) {
+    setState((current) => ({
+      ...current,
+      conversations: current.conversations.map((conversation) =>
+        conversation.id === current.activeConversationId
+          ? {
+              ...conversation,
+              messages: conversation.messages.map((message) =>
+                message.id === messageId && message.quickReplies
+                  ? {
+                      ...message,
+                      quickReplies: { ...message.quickReplies, answeredValue: value },
+                    }
+                  : message,
+              ),
+            }
+          : conversation,
+      ),
+    }))
+    void sendMessage(value)
+  }
+
+  function toggleHistory() {
+    if (isCompactViewport()) {
+      setHistoryOpen((open) => !open)
+      return
+    }
+    setDesktopHistoryOpen((open) => !open)
+  }
+
+  function toggleTools() {
+    if (isCompactViewport()) {
+      setStatusOpen((open) => !open)
+      return
+    }
+    setDesktopToolsOpen((open) => !open)
+  }
+
   const sidebar = (
     <ConversationSidebar
       activeConversationId={activeConversation.id}
       conversations={state.conversations}
+      plans={state.plans}
       query={query}
-      onClear={clearConversations}
+      onAssignPlan={assignConversationToPlan}
+      onCreatePlan={createPlan}
+      onDelete={(conversationId) => void deleteConversation(conversationId)}
+      onDeletePlan={(planId) => void deletePlan(planId)}
       onNewChat={startNewChat}
+      onPin={pinConversation}
       onQueryChange={setQuery}
+      onRename={renameConversation}
+      onRenamePlan={renamePlan}
       onSelect={selectConversation}
     />
   )
 
   const statusPanel = (
-    <StatusPanel
-      runtime={state.runtime}
-      tripContext={activeConversation.tripContext}
-      onQuickAction={(prompt) => {
-        setInput(prompt)
-        setStatusOpen(false)
-      }}
-    />
+    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} />
   )
 
   return (
-    <main className="tw-app-background h-svh min-h-[560px] overflow-hidden p-1.5 sm:p-2.5 lg:p-3 xl:p-4">
-      <div className="tw-app-shell mx-auto grid h-full max-w-[1720px] grid-rows-[64px_minmax(0,1fr)] gap-2 overflow-hidden rounded-[22px] p-2 sm:grid-rows-[70px_minmax(0,1fr)] sm:gap-3 sm:p-3">
+    <main className="tw-app-background h-dvh min-h-[520px] overflow-hidden">
+      <div className="grid h-full w-full grid-rows-[56px_minmax(0,1fr)] gap-1.5 overflow-hidden p-1.5 sm:grid-rows-[58px_minmax(0,1fr)] sm:gap-2 sm:p-2">
         <AppHeader
           account={account}
           backendOnline={state.runtime.backendOnline}
+          historyOpen={desktopHistoryOpen || historyOpen}
+          toolsOpen={desktopToolsOpen || statusOpen}
           onOpenAuth={setAuthMode}
           onOpenHelp={() => setHelpOpen(true)}
-          onOpenHistory={() => setHistoryOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={() => void signOut()}
+          onToggleHistory={toggleHistory}
+          onToggleTools={toggleTools}
         />
 
-        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-          <div className="glass-panel hidden min-h-0 overflow-hidden rounded-[18px] lg:block">{sidebar}</div>
+        <div
+          className={cn(
+            "grid min-h-0 min-w-0 grid-cols-1 gap-1.5 transition-[grid-template-columns] duration-200 sm:gap-2",
+            desktopToolsOpen && desktopHistoryOpen &&
+              "lg:grid-cols-[280px_minmax(0,1fr)_280px]",
+            desktopToolsOpen && !desktopHistoryOpen &&
+              "lg:grid-cols-[minmax(0,1fr)_280px]",
+            !desktopToolsOpen && desktopHistoryOpen &&
+              "lg:grid-cols-[280px_minmax(0,1fr)]",
+            !desktopToolsOpen && !desktopHistoryOpen && "lg:grid-cols-[minmax(0,1fr)]",
+          )}
+        >
+          {desktopHistoryOpen ? (
+            <div className="glass-panel hidden min-h-0 overflow-y-auto rounded-xl lg:block">
+              {sidebar}
+            </div>
+          ) : null}
           <ChatWorkspace
             attachments={attachments}
             conversation={activeConversation}
@@ -554,16 +829,19 @@ export function TripWeaverApp() {
             showToolActivity={settings.showToolActivity}
             onAttachments={(files) => void attachFiles(files)}
             onInputChange={setInput}
-            onOpenStatus={() => setStatusOpen(true)}
+            onQuickReply={answerQuickReply}
             onRemoveAttachment={(attachmentId) =>
               setAttachments((current) => current.filter(({ id }) => id !== attachmentId))
             }
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
+            onStop={() => abortRef.current?.abort()}
           />
-          <div className="glass-panel hidden min-h-0 overflow-y-auto rounded-[18px] xl:block">
-            {statusPanel}
-          </div>
+          {desktopToolsOpen ? (
+            <div className="glass-panel hidden min-h-0 overflow-hidden rounded-xl lg:block">
+              {statusPanel}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -578,22 +856,29 @@ export function TripWeaverApp() {
       </Sheet>
 
       <Sheet open={statusOpen} onOpenChange={setStatusOpen}>
-        <SheetContent side="right" className="w-[min(94vw,360px)] gap-0 overflow-y-auto p-0">
+        <SheetContent side="right" className="w-[min(94vw,360px)] gap-0 overflow-hidden p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Trip status</SheetTitle>
-            <SheetDescription>Live tools, trip context, and quick actions.</SheetDescription>
+            <SheetDescription>Live tools and current trip context.</SheetDescription>
           </SheetHeader>
           {statusPanel}
         </SheetContent>
       </Sheet>
 
       <SettingsDialog
+        historyCount={state.conversations.filter(hasUserMessage).length}
         open={settingsOpen}
         settings={settings}
+        onClearHistory={clearConversations}
         onOpenChange={setSettingsOpen}
         onSettingsChange={setSettings}
       />
-      <AuthDialog mode={authMode} onModeChange={setAuthMode} onSubmit={authenticate} />
+      <AuthDialog
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onGoogleSignIn={signInWithGoogle}
+        onSubmit={authenticate}
+      />
       <HelpCenterDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </main>
   )

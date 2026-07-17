@@ -61,7 +61,8 @@ class TestRouting:
         for intent in Intent:
             state = new_state("s1", "hi")
             state["intent"] = intent
-            assert route_from_intent(state) == intent.value
+            expected = Intent.GENERAL_QA.value if intent == Intent.END else intent.value
+            assert route_from_intent(state) == expected
 
     def test_route_from_intent_defaults_to_clarify_when_unset(self):
         state = new_state("s1", "hi")

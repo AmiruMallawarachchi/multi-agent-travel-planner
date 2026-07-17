@@ -16,8 +16,11 @@ from api.schemas import (
     ChatRequest,
     ConversationSyncRequest,
     ConversationsResponse,
+    ExternalAuthRequest,
     HealthResponse,
     LoginRequest,
+    PlanSyncRequest,
+    PlansResponse,
     RegisterRequest,
     SessionEvent,
     SessionResponse,
@@ -41,13 +44,19 @@ from core.accounts import (
     AccountError,
     AccountUser,
     authenticate_user,
+    authenticate_external_user,
     clear_user_conversations,
+    delete_user_conversation,
+    delete_user_plan,
     list_user_conversations,
+    list_user_plans,
     register_user,
     require_user,
     revoke_token,
     upsert_user_conversation,
+    upsert_user_plan,
 )
+from core.supabase_auth import ExternalAuthError, verify_supabase_google_token
 
 logger = logging.getLogger("tripweaver")
 router = APIRouter()
@@ -101,6 +110,28 @@ async def login(
     return AuthResponse(token=token, user=_user_response(user))
 
 
+@router.post("/auth/oauth", response_model=AuthResponse)
+async def oauth_login(
+    payload: ExternalAuthRequest,
+    request: Request,
+    api_key: str = Depends(require_api_key),
+) -> AuthResponse:
+    check_rate_limit(client_identity(request, api_key))
+    try:
+        identity = await verify_supabase_google_token(payload.access_token)
+        token, user = authenticate_external_user(
+            identity.provider,
+            identity.subject,
+            identity.email,
+            identity.name,
+        )
+    except ExternalAuthError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except AccountError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return AuthResponse(token=token, user=_user_response(user))
+
+
 @router.post("/auth/logout")
 async def logout(
     authorization: str | None = Header(default=None),
@@ -141,6 +172,51 @@ async def save_conversation(
 async def clear_conversations(user: AccountUser = Depends(require_user)) -> dict[str, bool]:
     clear_user_conversations(user.id)
     return {"ok": True}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, bool]:
+    try:
+        deleted = delete_user_conversation(user.id, conversation_id)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
+
+
+@router.get("/plans", response_model=PlansResponse)
+async def plans(user: AccountUser = Depends(require_user)) -> PlansResponse:
+    return PlansResponse(plans=list_user_plans(user.id))
+
+
+@router.put("/plans/{plan_id}")
+async def save_plan(
+    plan_id: str,
+    payload: PlanSyncRequest,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, object]:
+    plan = payload.plan
+    if plan.get("id") != plan_id:
+        raise HTTPException(422, "Plan id does not match route")
+    try:
+        saved = upsert_user_plan(user.id, plan)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "plan": saved}
+
+
+@router.delete("/plans/{plan_id}")
+async def delete_plan(
+    plan_id: str,
+    user: AccountUser = Depends(require_user),
+) -> dict[str, bool]:
+    try:
+        deleted = delete_user_plan(user.id, plan_id)
+    except AccountError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"ok": True, "deleted": deleted}
 
 
 @router.post("/chat/stream")

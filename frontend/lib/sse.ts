@@ -9,6 +9,11 @@ export type StreamEvent =
       data: unknown
     }
   | { type: "token"; content: string }
+  | {
+      type: "quick_replies"
+      options: { id: string; label: string; value: string }[]
+      allow_custom_answer?: boolean
+    }
   | { type: "error"; message: string }
   | { type: "done" }
 

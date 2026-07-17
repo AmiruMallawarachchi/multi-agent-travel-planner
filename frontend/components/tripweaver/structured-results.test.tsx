@@ -90,6 +90,9 @@ describe("structured travel results", () => {
                 category: "Museum",
                 address: "Ueno Park",
                 rating: 4.6,
+                review_count: 1200,
+                open_state: "Open now",
+                coordinates: { latitude: 35.7188, longitude: 139.7765 },
               },
             ],
           }}
@@ -100,6 +103,12 @@ describe("structured travel results", () => {
     expect(screen.getByText("Tokyo, Japan")).toBeInTheDocument()
     expect(screen.getByText(/15,820 JPY/)).toBeInTheDocument()
     expect(screen.getByText("Tokyo National Museum")).toBeInTheDocument()
+    expect(screen.getByText(/1,200 reviews/)).toBeInTheDocument()
+    expect(screen.getByText("Open now")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Open Tokyo National Museum in maps" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("35.7188"),
+    )
   })
 
   it("renders structured itinerary days and activities", () => {
@@ -122,6 +131,9 @@ describe("structured travel results", () => {
                   name: "Tokyo National Museum",
                   time_slot: "morning",
                   duration_minutes: 120,
+                  category: "Museum",
+                  address: "Ueno Park",
+                  source_url: "https://example.com/tokyo-museum",
                 },
               ],
             },
@@ -132,6 +144,11 @@ describe("structured travel results", () => {
 
     expect(screen.getByText("Day 1 in Tokyo")).toBeInTheDocument()
     expect(screen.getByText("Tokyo National Museum")).toBeInTheDocument()
-    expect(screen.getByText(/morning · 120 minutes/)).toBeInTheDocument()
+    expect(screen.getByText(/morning - 120 minutes/)).toBeInTheDocument()
+    expect(screen.getByText("Museum")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Open details for Tokyo National Museum" })).toHaveAttribute(
+      "href",
+      "https://example.com/tokyo-museum",
+    )
   })
 })

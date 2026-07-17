@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 
-from api.schemas import ResultEvent, StatusEvent, TokenEvent
+from api.schemas import QuickRepliesEvent, ResultEvent, StatusEvent, TokenEvent
 from api.sse import (
     chunk_text,
     encode_sse,
+    quick_replies_for_text,
     stream_events_from_graph_event,
     user_safe_error,
 )
@@ -14,6 +15,7 @@ from api.sse import (
 class Chunk:
     def __init__(self, content):
         self.content = content
+        self.tool_calls = []
 
 
 def test_encode_sse_serializes_one_data_frame():
@@ -115,6 +117,41 @@ def test_stream_events_from_graph_event_hides_router_model_output():
     }
 
     assert list(stream_events_from_graph_event(event)) == []
+
+
+def test_model_end_emits_numbered_choices_for_one_planning_question():
+    event = {
+        "event": "on_chat_model_end",
+        "metadata": {"langgraph_node": "itinerary"},
+        "data": {"output": Chunk("How many travellers will join this trip?")},
+    }
+
+    events = list(stream_events_from_graph_event(event))
+
+    assert len(events) == 1
+    assert isinstance(events[0], QuickRepliesEvent)
+    assert [option.label for option in events[0].options] == [
+        "Solo",
+        "Two people",
+        "Family",
+        "Group",
+    ]
+    assert events[0].allow_custom_answer is True
+
+
+def test_quick_reply_detection_ignores_statements_and_tool_call_rounds():
+    assert quick_replies_for_text("Your itinerary is ready.") is None
+    output = Chunk("What is your budget?")
+    output.tool_calls = [{"name": "create_itinerary"}]
+    assert list(
+        stream_events_from_graph_event(
+            {
+                "event": "on_chat_model_end",
+                "metadata": {"langgraph_node": "itinerary"},
+                "data": {"output": output},
+            }
+        )
+    ) == []
 
 
 def test_stream_events_from_graph_event_ignores_unknown_events():

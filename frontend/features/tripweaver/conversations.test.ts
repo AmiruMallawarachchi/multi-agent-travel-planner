@@ -19,6 +19,16 @@ describe("conversation helpers", () => {
     expect(conversation.messages[0]).toMatchObject({ role: "assistant" })
   })
 
+  it("personalizes a new conversation with the traveller's first name", () => {
+    const conversation = createConversation(
+      new Date("2026-07-13T08:00:00.000Z"),
+      "trip-2",
+      "Maya Perera",
+    )
+
+    expect(conversation.messages[0].content).toMatch(/^Welcome, Maya\. Hi, I am TripWeaver\./)
+  })
+
   it("derives a concise title from the first request", () => {
     expect(deriveConversationTitle("  Plan   seven days in Tokyo with food tours  ")).toBe(
       "Plan seven days in Tokyo with food tours",

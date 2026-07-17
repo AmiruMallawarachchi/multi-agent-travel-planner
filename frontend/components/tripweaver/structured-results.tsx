@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CloudSun,
   Clock3,
+  ExternalLink,
   Map as MapIcon,
   MapPinned,
   Plane,
@@ -35,6 +36,29 @@ function text(value: unknown, fallback = "Not provided") {
 
 function displayNumber(value: unknown, fallback = "-") {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : fallback
+}
+
+function safeHttpUrl(value: unknown) {
+  if (typeof value !== "string") return null
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function placeMapUrl(place: DataRecord) {
+  const coordinates = record(place.coordinates)
+  const latitude = coordinates?.latitude
+  const longitude = coordinates?.longitude
+  if (typeof latitude === "number" && typeof longitude === "number") {
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+  }
+  const address = text(place.address, text(place.name, ""))
+  return address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : null
 }
 
 function ResultHeading({ result }: { result: StructuredResult }) {
@@ -196,23 +220,53 @@ function CurrencyPreview({ data }: { data: unknown }) {
 function LocationPreview({ data }: { data: unknown }) {
   const places = records(data).slice(0, 3)
   return (
-    <div className="divide-y divide-border/60">
-      {places.map((place, index) => (
-        <div className="py-2" key={`${text(place.name)}-${index}`}>
-          <div className="flex items-start justify-between gap-3">
-            <p className="truncate text-xs font-medium">{text(place.name)}</p>
-            {place.rating !== undefined ? (
-              <span className="flex shrink-0 items-center gap-1 text-[11px]">
-                <Star className="size-3" aria-hidden="true" />
-                {displayNumber(place.rating)}
-              </span>
+    <div className="space-y-2 py-2">
+      {places.map((place, index) => {
+        const mapUrl = placeMapUrl(place)
+        return (
+          <div
+            className="glass-control grid grid-cols-[28px_minmax(0,1fr)_auto] gap-2.5 rounded-lg p-2.5"
+            key={`${text(place.name)}-${index}`}
+          >
+            <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+              {index + 1}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold">{text(place.name)}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {text(place.category, text(place.region, "Location"))} - {text(place.address, text(place.country, ""))}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
+                {place.rating !== undefined ? (
+                  <span className="flex items-center gap-1">
+                    <Star className="size-3 fill-current text-amber-500" aria-hidden="true" />
+                    {displayNumber(place.rating)}
+                    {place.review_count !== undefined
+                      ? ` (${displayNumber(place.review_count)} reviews)`
+                      : ""}
+                  </span>
+                ) : null}
+                {place.open_state ? (
+                  <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                    {text(place.open_state)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            {mapUrl ? (
+              <a
+                href={mapUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="glass-interactive flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label={`Open ${text(place.name)} in maps`}
+              >
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+              </a>
             ) : null}
           </div>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {text(place.category, text(place.region, "Location"))} · {text(place.address, text(place.country, ""))}
-          </p>
-        </div>
-      ))}
+        )
+      })}
       {places.length === 0 ? <p className="py-2 text-xs text-muted-foreground">No places returned.</p> : null}
     </div>
   )
@@ -276,12 +330,35 @@ export function ItineraryDetails({ data }: { data: unknown }) {
             </div>
             <ol className="mt-3 space-y-3 border-l pl-4">
               {records(day.items).map((item, itemIndex) => (
-                <li key={`${text(item.name)}-${itemIndex}`}>
-                  <p className="text-sm font-medium">{text(item.name)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {text(item.time_slot, "Flexible time")} · {displayNumber(item.duration_minutes)} minutes
-                    {item.address ? ` · ${text(item.address)}` : ""}
-                  </p>
+                <li className="relative grid grid-cols-[minmax(0,1fr)_auto] gap-2" key={`${text(item.name)}-${itemIndex}`}>
+                  <span className="absolute -left-[21px] top-1.5 size-2.5 rounded-full border-2 border-background bg-primary" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium">{text(item.name)}</p>
+                      {item.category ? (
+                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] capitalize text-primary">
+                          {text(item.category)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs capitalize text-muted-foreground">
+                      {text(item.time_slot, "Flexible time")} - {displayNumber(item.duration_minutes)} minutes
+                    </p>
+                    {item.address ? (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{text(item.address)}</p>
+                    ) : null}
+                  </div>
+                  {safeHttpUrl(item.source_url) ? (
+                    <a
+                      href={safeHttpUrl(item.source_url) ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="glass-interactive flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                      aria-label={`Open details for ${text(item.name)}`}
+                    >
+                      <ExternalLink className="size-3.5" aria-hidden="true" />
+                    </a>
+                  ) : null}
                 </li>
               ))}
             </ol>

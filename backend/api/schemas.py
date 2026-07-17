@@ -33,6 +33,10 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=256)
 
 
+class ExternalAuthRequest(BaseModel):
+    access_token: str = Field(..., min_length=16, max_length=8192)
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
@@ -51,6 +55,14 @@ class ConversationSyncRequest(BaseModel):
 
 class ConversationsResponse(BaseModel):
     conversations: list[dict[str, Any]]
+
+
+class PlanSyncRequest(BaseModel):
+    plan: dict[str, Any]
+
+
+class PlansResponse(BaseModel):
+    plans: list[dict[str, Any]]
 
 
 class SessionEvent(BaseModel):
@@ -84,6 +96,18 @@ class TokenEvent(BaseModel):
     content: str
 
 
+class QuickReplyOption(BaseModel):
+    id: str
+    label: str
+    value: str
+
+
+class QuickRepliesEvent(BaseModel):
+    type: Literal["quick_replies"] = "quick_replies"
+    options: list[QuickReplyOption]
+    allow_custom_answer: bool = True
+
+
 class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
     message: str
@@ -99,6 +123,7 @@ StreamEvent = (
     | ToolEvent
     | ResultEvent
     | TokenEvent
+    | QuickRepliesEvent
     | ErrorEvent
     | DoneEvent
 )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from langchain_core.messages import SystemMessage, ToolMessage
@@ -37,6 +38,14 @@ def unavailable_tool_prompt() -> str:
     )
 
 
+def current_date_context() -> str:
+    today = date.today().isoformat()
+    return (
+        f"\n\nCurrent date: {today}. When the traveller gives a month/day without "
+        "a year, infer the next future occurrence. Do not invent past travel dates."
+    )
+
+
 async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> dict:
     tool_groups = await asyncio.gather(
         *(get_tools_for(server) for server in config.servers)
@@ -54,7 +63,7 @@ async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> di
     if not tools:
         system += unavailable_tool_prompt()
 
-    conversation = [SystemMessage(content=system), *recent_history(state)]
+    conversation = [SystemMessage(content=f"{system}{current_date_context()}"), *recent_history(state)]
     new_messages: list = []
     tool_records: list = []
     activity = ActivityState.RESPONDING

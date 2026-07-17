@@ -11,10 +11,8 @@ import {
   MapPinned,
   Map as MapIcon,
   Plane,
-  Route,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type {
   RuntimeState,
@@ -23,6 +21,7 @@ import type {
   TripContext,
   ToolStatus,
 } from "@/features/tripweaver/types"
+import { cn } from "@/lib/utils"
 
 const SERVICE_ICONS: Record<ServiceKey, React.ComponentType<{ className?: string }>> = {
   flight: Plane,
@@ -78,19 +77,16 @@ function ContextValue({ children }: { children: React.ReactNode }) {
 interface StatusPanelProps {
   runtime: RuntimeState
   tripContext: TripContext
-  onQuickAction: (prompt: string) => void
   className?: string
 }
 
-export function StatusPanel({
-  runtime,
-  tripContext,
-  onQuickAction,
-  className,
-}: StatusPanelProps) {
+export function StatusPanel({ runtime, tripContext, className }: StatusPanelProps) {
   return (
-    <aside className={className} aria-label="Trip status">
-      <section className="p-4 lg:p-5" aria-labelledby="active-tools-heading">
+    <aside
+      className={cn("h-full min-h-0 overflow-y-auto overscroll-contain", className)}
+      aria-label="Trip status"
+    >
+      <section className="p-3.5" aria-labelledby="active-tools-heading">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <h2 id="active-tools-heading" className="text-xs font-semibold uppercase">
@@ -109,7 +105,7 @@ export function StatusPanel({
 
       <Separator />
 
-      <section className="p-4 lg:p-5" aria-labelledby="trip-context-heading">
+      <section className="p-3.5" aria-labelledby="trip-context-heading">
         <h2 id="trip-context-heading" className="mb-4 text-xs font-semibold uppercase">
           Trip context
         </h2>
@@ -125,70 +121,6 @@ export function StatusPanel({
           <dt className="text-xs">Preferences</dt>
           <ContextValue>{tripContext.preferences.join(", ")}</ContextValue>
         </dl>
-      </section>
-
-      <Separator />
-
-      <section className="p-4 lg:p-5" aria-labelledby="quick-actions-heading">
-        <h2 id="quick-actions-heading" className="mb-3 text-xs font-semibold uppercase">
-          Quick actions
-        </h2>
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Help me search for flights.")}
-            aria-label="Search flights"
-          >
-            <Plane aria-hidden="true" />
-            Search flights
-          </Button>
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Help me search for hotels.")}
-            aria-label="Search hotels"
-          >
-            <BedDouble aria-hidden="true" />
-            Search hotels
-          </Button>
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Plan a day-by-day itinerary for my trip.")}
-            aria-label="Plan itinerary"
-          >
-            <Route aria-hidden="true" />
-            Plan itinerary
-          </Button>
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Check the weather for my trip.")}
-            aria-label="Check weather"
-          >
-            <CloudSun aria-hidden="true" />
-            Check weather
-          </Button>
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Convert currency for my trip.")}
-            aria-label="Convert currency"
-          >
-            <Banknote aria-hidden="true" />
-            Currency converter
-          </Button>
-          <Button
-            variant="outline"
-            className="glass-control glass-interactive h-11 w-full justify-start rounded-xl"
-            onClick={() => onQuickAction("Find attractions and restaurants near my destination.")}
-            aria-label="Find places"
-          >
-            <MapPinned aria-hidden="true" />
-            Find places
-          </Button>
-        </div>
       </section>
     </aside>
   )

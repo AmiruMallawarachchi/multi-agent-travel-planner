@@ -1,7 +1,6 @@
 "use client"
 
-import { Moon, Save, Workflow } from "lucide-react"
-import { useTheme } from "next-themes"
+import { Save, Trash2, Workflow } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -14,6 +13,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import type { TripWeaverSettings } from "@/features/tripweaver/types"
 
 interface SettingsDialogProps {
@@ -21,6 +31,8 @@ interface SettingsDialogProps {
   settings: TripWeaverSettings
   onOpenChange: (open: boolean) => void
   onSettingsChange: (settings: TripWeaverSettings) => void
+  historyCount: number
+  onClearHistory: () => void
 }
 
 export function SettingsDialog({
@@ -28,9 +40,9 @@ export function SettingsDialog({
   settings,
   onOpenChange,
   onSettingsChange,
+  historyCount,
+  onClearHistory,
 }: SettingsDialogProps) {
-  const { resolvedTheme, setTheme } = useTheme()
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md rounded-[20px]" showCloseButton={false}>
@@ -68,18 +80,36 @@ export function SettingsDialog({
             />
           </label>
 
-          <label className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 p-3">
-            <Moon className="size-4 text-muted-foreground" aria-hidden="true" />
-            <span>
-              <span className="block text-sm font-medium">Dark appearance</span>
-              <span className="block text-xs text-muted-foreground">Use a darker workspace</span>
-            </span>
-            <Switch
-              aria-label="Dark appearance"
-              checked={resolvedTheme === "dark"}
-              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-            />
-          </label>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Danger zone</p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-11 w-full justify-between text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={historyCount === 0}
+              >
+                Delete all history
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete all conversation history?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently removes all {historyCount} saved conversations. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={onClearHistory}>
+                  Delete all
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         <DialogFooter>
