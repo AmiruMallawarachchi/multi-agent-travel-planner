@@ -13,6 +13,9 @@ export type StreamEvent =
       type: "quick_replies"
       options: { id: string; label: string; value: string }[]
       allow_custom_answer?: boolean
+      question_id?: string
+      step?: number
+      total_steps?: number
     }
   | { type: "error"; message: string }
   | { type: "done" }

@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils"
 interface QuickReplyQuestionProps {
   options: QuickReplyOption[]
   allowCustomAnswer?: boolean
+  step?: number
+  totalSteps?: number
   answeredValue?: string
   disabled?: boolean
   onAnswer: (value: string) => void
@@ -19,6 +21,8 @@ interface QuickReplyQuestionProps {
 export function QuickReplyQuestion({
   options,
   allowCustomAnswer = false,
+  step,
+  totalSteps,
   answeredValue,
   disabled = false,
   onAnswer,
@@ -26,6 +30,10 @@ export function QuickReplyQuestion({
   const [customOpen, setCustomOpen] = useState(false)
   const [customValue, setCustomValue] = useState("")
   const isAnswered = Boolean(answeredValue)
+  const currentStep = step ?? 0
+  const questionCount = totalSteps ?? 0
+  const hasProgress = currentStep > 0 && questionCount > 0 && currentStep <= questionCount
+  const progress = hasProgress ? Math.round((currentStep / questionCount) * 100) : 0
 
   function submitCustom() {
     const value = customValue.trim()
@@ -35,6 +43,28 @@ export function QuickReplyQuestion({
 
   return (
     <div className="glass-divider mt-3 border-t pt-3" aria-label="Suggested answers">
+      {hasProgress ? (
+        <div className="mb-3" aria-label={`Question ${currentStep} of ${questionCount}`}>
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
+            <span>Guided estimate</span>
+            <span>
+              Question {currentStep} of {questionCount}
+            </span>
+          </div>
+          <div
+            className="h-1.5 overflow-hidden rounded-full bg-muted/70"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={questionCount}
+            aria-valuenow={currentStep}
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-1" role="group" aria-label="Answer choices">
         {options.map((option, index) => (
           <Button

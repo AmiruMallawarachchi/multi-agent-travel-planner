@@ -170,6 +170,9 @@ describe("stream state", () => {
         type: "quick_replies",
         options: [{ id: "two", label: "2 people", value: "2 travellers" }],
         allow_custom_answer: true,
+        question_id: "travellers",
+        step: 2,
+        total_steps: 3,
       },
     )
 
@@ -178,6 +181,9 @@ describe("stream state", () => {
       quickReplies: {
         options: [{ id: "two", label: "2 people", value: "2 travellers" }],
         allowCustomAnswer: true,
+        questionId: "travellers",
+        step: 2,
+        totalSteps: 3,
       },
     })
   })
