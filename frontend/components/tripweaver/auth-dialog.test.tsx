@@ -60,4 +60,20 @@ describe("AuthDialog", () => {
     await user.click(screen.getByRole("button", { name: "Continue with Google" }))
     expect(onGoogleSignIn).toHaveBeenCalledOnce()
   })
+
+  it("shows an auth callback error inside the dialog", () => {
+    render(
+      <AuthDialog
+        externalError="The TripWeaver account backend is not reachable."
+        mode="login"
+        onModeChange={vi.fn()}
+        onGoogleSignIn={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText("The TripWeaver account backend is not reachable."),
+    ).toBeInTheDocument()
+  })
 })

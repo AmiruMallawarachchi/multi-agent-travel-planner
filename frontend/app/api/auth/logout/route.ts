@@ -10,10 +10,14 @@ import {
 export async function POST() {
   const token = await accountToken()
   if (token) {
-    await fetch(backendUrl("/auth/logout"), {
-      method: "POST",
-      headers: backendHeaders(token),
-    })
+    try {
+      await fetch(backendUrl("/auth/logout"), {
+        method: "POST",
+        headers: backendHeaders(token),
+      })
+    } catch {
+      // Clear the browser session even if the demo backend is asleep or restarting.
+    }
   }
   await clearAccountToken()
   return NextResponse.json({ ok: true })

@@ -194,6 +194,24 @@ Expected frontend proxy result:
 }
 ```
 
+### Account sign-in troubleshooting
+
+If Google opens the account chooser and then returns to the TripWeaver sign-in
+dialog, the Google-to-Supabase step is working but the TripWeaver account
+exchange failed. Check these values:
+
+- Render has `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+- Render has `TRIPWEAVER_API_KEYS`.
+- Vercel has `BACKEND_URL` with no trailing slash.
+- Vercel has `BACKEND_API_KEY` exactly matching one Render
+  `TRIPWEAVER_API_KEYS` value.
+- Supabase Authentication URL Configuration has the Vercel site URL and
+  `https://YOUR_VERCEL_URL/auth/callback` in Redirect URLs.
+
+Email/password sign-in or registration showing the account backend as
+unavailable usually means the Render service is sleeping, `BACKEND_URL` points
+to the wrong service, or `BACKEND_API_KEY` does not match Render.
+
 ## 5. What works on this free demo path
 
 This path supports:
