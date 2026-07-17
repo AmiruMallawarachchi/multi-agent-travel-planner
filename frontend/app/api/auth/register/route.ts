@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server"
 
-import { backendHeaders, backendUrl, setAccountToken } from "../../_tripweaver-backend"
+import {
+  ACCOUNT_BACKEND_UNREACHABLE,
+  backendHeaders,
+  backendUrl,
+  setAccountToken,
+} from "../../_tripweaver-backend"
 import { readJsonObject, responseDetail } from "@/lib/http-response"
 
 export async function POST(request: Request) {
-  const response = await fetch(backendUrl("/auth/register"), {
-    method: "POST",
-    headers: backendHeaders(),
-    body: await request.text(),
-  })
+  let response: Response
+  try {
+    response = await fetch(backendUrl("/auth/register"), {
+      method: "POST",
+      headers: backendHeaders(),
+      body: await request.text(),
+    })
+  } catch {
+    return NextResponse.json({ detail: ACCOUNT_BACKEND_UNREACHABLE }, { status: 503 })
+  }
+
   const body = await readJsonObject(response)
 
   if (!response.ok) {

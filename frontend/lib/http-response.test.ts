@@ -13,4 +13,12 @@ describe("HTTP response helpers", () => {
     expect(responseDetail(body, "Unavailable")).toBe("Email already exists")
     expect(responseDetail({}, "Unavailable")).toBe("Unavailable")
   })
+
+  it("turns structured validation details into a safe message", async () => {
+    const body = await readJsonObject(Response.json({ detail: [{ msg: "Field required" }] }))
+
+    expect(responseDetail(body, "Unavailable")).toBe(
+      "The account request was rejected. Check the form fields and try again.",
+    )
+  })
 })
