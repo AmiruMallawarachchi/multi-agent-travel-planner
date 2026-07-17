@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 
-import { accountToken, backendHeaders, backendUrl } from "../../_tripweaver-backend"
+import {
+  ACCOUNT_BACKEND_UNREACHABLE,
+  accountToken,
+  backendHeaders,
+  backendUrl,
+} from "../../_tripweaver-backend"
 import { readJsonObject, responseDetail } from "@/lib/http-response"
 
 export async function GET() {
@@ -9,11 +14,17 @@ export async function GET() {
     return NextResponse.json({ detail: "Not signed in" }, { status: 401 })
   }
 
-  const response = await fetch(backendUrl("/auth/me"), {
-    method: "GET",
-    headers: backendHeaders(token),
-    cache: "no-store",
-  })
+  let response: Response
+  try {
+    response = await fetch(backendUrl("/auth/me"), {
+      method: "GET",
+      headers: backendHeaders(token),
+      cache: "no-store",
+    })
+  } catch {
+    return NextResponse.json({ detail: ACCOUNT_BACKEND_UNREACHABLE }, { status: 503 })
+  }
+
   const body = await readJsonObject(response)
   if (!response.ok) {
     return NextResponse.json(

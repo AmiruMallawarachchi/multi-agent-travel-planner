@@ -39,12 +39,19 @@ function passwordStrength(password: string): PasswordStrength | null {
 
 interface AuthDialogProps {
   mode: AuthMode | null
+  externalError?: string | null
   onModeChange: (mode: AuthMode | null) => void
   onGoogleSignIn: () => Promise<void>
   onSubmit: (mode: AuthMode, payload: { email: string; password: string; name?: string }) => Promise<void>
 }
 
-export function AuthDialog({ mode, onModeChange, onGoogleSignIn, onSubmit }: AuthDialogProps) {
+export function AuthDialog({
+  mode,
+  externalError = null,
+  onModeChange,
+  onGoogleSignIn,
+  onSubmit,
+}: AuthDialogProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -54,6 +61,7 @@ export function AuthDialog({ mode, onModeChange, onGoogleSignIn, onSubmit }: Aut
   const [showPassword, setShowPassword] = useState(false)
   const isRegister = mode === "register"
   const strength = isRegister ? passwordStrength(password) : null
+  const visibleError = error ?? externalError
 
   useEffect(() => {
     if (!mode) {
@@ -203,7 +211,7 @@ export function AuthDialog({ mode, onModeChange, onGoogleSignIn, onSubmit }: Aut
             ) : null}
           </label>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {visibleError ? <p className="text-sm text-destructive">{visibleError}</p> : null}
 
           <Button
             className="h-11 w-full rounded-xl"

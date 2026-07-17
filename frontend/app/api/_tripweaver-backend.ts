@@ -2,8 +2,11 @@ import { cookies } from "next/headers"
 
 export const SESSION_COOKIE = "tripweaver_session"
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000"
+const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:8000").replace(/\/+$/, "")
 const BACKEND_API_KEY = process.env.BACKEND_API_KEY
+
+export const ACCOUNT_BACKEND_UNREACHABLE =
+  "The TripWeaver account backend is not reachable. Check the Render service status and the Vercel BACKEND_URL setting."
 
 export function backendUrl(path: string) {
   return `${BACKEND_URL}${path}`

@@ -15,5 +15,9 @@ export async function readJsonObject(response: Response): Promise<JsonObject> {
 }
 
 export function responseDetail(body: JsonObject, fallback: string) {
-  return typeof body.detail === "string" && body.detail.trim() ? body.detail : fallback
+  if (typeof body.detail === "string" && body.detail.trim()) return body.detail
+  if (Array.isArray(body.detail) && body.detail.length > 0) {
+    return "The account request was rejected. Check the form fields and try again."
+  }
+  return fallback
 }

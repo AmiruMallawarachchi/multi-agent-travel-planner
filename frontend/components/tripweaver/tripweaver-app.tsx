@@ -132,6 +132,29 @@ function newId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function authErrorMessage(error: string) {
+  switch (error) {
+    case "missing_google_code":
+      return "Google did not return a sign-in code. Please try Google sign in again."
+    case "supabase_session_failed":
+      return "Supabase could not create a Google session. Check the Supabase Google provider and callback URL."
+    case "account_backend_unreachable":
+      return "The TripWeaver account backend is not reachable. Check the Render service status and the Vercel BACKEND_URL setting."
+    case "account_backend_unavailable":
+      return "The TripWeaver account backend is online but cannot verify Google sign in right now. Check the Render auth environment variables."
+    case "google_not_configured":
+      return "Google sign in is not configured on the backend. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to Render."
+    case "account_backend_rejected":
+      return "The backend rejected the account request. Check that Vercel BACKEND_API_KEY matches Render TRIPWEAVER_API_KEYS."
+    case "account_backend_incomplete":
+      return "The backend returned an incomplete account response. Please redeploy the latest backend."
+    case "google":
+      return "Google sign in could not be completed. Please try again."
+    default:
+      return "Sign in could not be completed. Please try again."
+  }
+}
+
 export function TripWeaverApp() {
   const [state, setState] = useState<AppState>(createInitialState)
   const [settings, setSettings] = useState<TripWeaverSettings>(DEFAULT_SETTINGS)
@@ -147,6 +170,7 @@ export function TripWeaverApp() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [authMode, setAuthMode] = useState<AuthMode | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
   const [account, setAccount] = useState<AccountUser | null>(null)
   const hydratedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -239,10 +263,13 @@ export function TripWeaverApp() {
     const params = new URLSearchParams(window.location.search)
     const authError = params.get("auth_error")
     const authSuccess = params.get("auth")
-    if (authError === "google") {
-      toast.error("Google sign in could not be completed. Please try again.")
+    if (authError) {
+      const message = authErrorMessage(authError)
+      setAuthError(message)
+      toast.error(message)
       setAuthMode("login")
     } else if (authSuccess === "google") {
+      setAuthError(null)
       toast.success("Signed in with Google")
     } else {
       return
@@ -393,6 +420,7 @@ export function TripWeaverApp() {
       )
     }
     setAccount(user)
+    setAuthError(null)
     setAuthMode(null)
     toast.success(mode === "register" ? "Account created" : "Signed in")
     await loadAccountWorkspace(user.name)
@@ -874,8 +902,12 @@ export function TripWeaverApp() {
         onSettingsChange={setSettings}
       />
       <AuthDialog
+        externalError={authError}
         mode={authMode}
-        onModeChange={setAuthMode}
+        onModeChange={(mode) => {
+          setAuthError(null)
+          setAuthMode(mode)
+        }}
         onGoogleSignIn={signInWithGoogle}
         onSubmit={authenticate}
       />
