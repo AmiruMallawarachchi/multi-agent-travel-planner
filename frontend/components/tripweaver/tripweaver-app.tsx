@@ -745,12 +745,16 @@ export function TripWeaverApp() {
 
   function assignConversationToPlan(conversationId: string, planId?: string) {
     const updatedAt = new Date().toISOString()
+    const planName = planId
+      ? state.plans.find((plan) => plan.id === planId)?.name
+      : undefined
     setState((current) => ({
       ...current,
       conversations: current.conversations.map((conversation) =>
         conversation.id === conversationId ? { ...conversation, planId, updatedAt } : conversation,
       ),
     }))
+    toast.success(planName ? `Added to ${planName}` : "Moved to all chats")
   }
 
   function answerQuickReply(messageId: string, value: string) {
