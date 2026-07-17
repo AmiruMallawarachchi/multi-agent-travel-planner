@@ -15,6 +15,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from agents.entity import ActivityState, Intent, ToolCallStatus, new_state
+from agents.guided_intake import TRIP_BUDGET_QUESTIONS
 from agents.nodes import (
     classify_intent,
     currency_node,
@@ -23,6 +24,7 @@ from agents.nodes import (
     itinerary_node,
     location_node,
     route_from_intent,
+    trip_budget_node,
     weather_node,
 )
 
@@ -56,6 +58,47 @@ class TestRouting:
         with patch("agents.nodes.get_router_llm", return_value=_fake_llm("banana")):
             result = await classify_intent(state)
         assert result["intent"] == Intent.CLARIFY
+
+    @pytest.mark.asyncio
+    async def test_active_guided_intake_bypasses_router_model(self):
+        state = new_state("s1", "Sri Lanka and LKR")
+        state["guided_intake"] = {
+            "kind": "trip_budget",
+            "status": "collecting",
+            "step": 0,
+            "original_request": "How much is a week in Singapore?",
+            "answers": {},
+        }
+
+        with patch("agents.nodes.get_router_llm") as router_llm:
+            result = await classify_intent(state)
+
+        router_llm.assert_not_called()
+        assert result["intent"] == Intent.TRIP_BUDGET
+
+    @pytest.mark.asyncio
+    async def test_trip_cost_request_uses_guided_intake_without_router_call(self):
+        state = new_state(
+            "s1",
+            "I want to travel to Singapore for a week. How much money will I need?",
+        )
+
+        with patch("agents.nodes.get_router_llm") as router_llm:
+            result = await classify_intent(state)
+
+        router_llm.assert_not_called()
+        assert result["intent"] == Intent.TRIP_BUDGET
+
+    @pytest.mark.asyncio
+    async def test_plain_currency_conversion_still_uses_router(self):
+        state = new_state("s1", "How much is 500 USD in LKR?")
+        with patch(
+            "agents.nodes.get_router_llm", return_value=_fake_llm("currency")
+        ) as router_llm:
+            result = await classify_intent(state)
+
+        router_llm.assert_called_once()
+        assert result["intent"] == Intent.CURRENCY
 
     def test_route_from_intent_covers_every_intent(self):
         for intent in Intent:
@@ -93,6 +136,98 @@ class TestRouting:
         config = runner.await_args.args[1]
         assert config.agent_name == expected_agent
         assert config.servers == expected_servers
+
+
+class TestTripBudgetIntake:
+    @pytest.mark.asyncio
+    async def test_starts_with_only_origin_and_currency_question(self):
+        state = new_state(
+            "budget-1",
+            "I want a week in Singapore but do not know how much it will cost.",
+        )
+
+        result = await trip_budget_node(state)
+
+        message = result["messages"][0]
+        metadata = message.additional_kwargs["tripweaver_quick_replies"]
+        assert message.content == TRIP_BUDGET_QUESTIONS[0]["prompt"]
+        assert metadata["step"] == 1
+        assert metadata["total_steps"] == 3
+        assert [option["label"] for option in metadata["options"]] == [
+            "Sri Lanka (LKR)",
+            "India (INR)",
+            "United States (USD)",
+            "Singapore (SGD)",
+        ]
+        assert result["guided_intake"]["answers"] == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("step", "answer", "answer_key", "next_prompt"),
+        [
+            (
+                0,
+                "I am travelling from Sri Lanka; use LKR.",
+                "origin_currency",
+                TRIP_BUDGET_QUESTIONS[1]["prompt"],
+            ),
+            (
+                1,
+                "Include the complete trip.",
+                "expense_scope",
+                TRIP_BUDGET_QUESTIONS[2]["prompt"],
+            ),
+        ],
+    )
+    async def test_records_one_answer_before_showing_next_question(
+        self, step, answer, answer_key, next_prompt
+    ):
+        state = new_state("budget-1", answer)
+        state["guided_intake"] = {
+            "kind": "trip_budget",
+            "status": "collecting",
+            "step": step,
+            "original_request": "How much is a week in Singapore?",
+            "answers": (
+                {"origin_currency": "Sri Lanka and LKR"} if step == 1 else {}
+            ),
+        }
+
+        result = await trip_budget_node(state)
+
+        assert result["guided_intake"]["answers"][answer_key] == answer
+        assert result["messages"][0].content == next_prompt
+        metadata = result["messages"][0].additional_kwargs[
+            "tripweaver_quick_replies"
+        ]
+        assert metadata["step"] == step + 2
+
+    @pytest.mark.asyncio
+    async def test_final_answer_triggers_estimate_with_all_collected_context(self):
+        state = new_state("budget-1", "Use comfortable mid-range estimates.")
+        state["guided_intake"] = {
+            "kind": "trip_budget",
+            "status": "collecting",
+            "step": 2,
+            "original_request": "How much is a week in Singapore?",
+            "answers": {
+                "origin_currency": "Sri Lanka and LKR",
+                "expense_scope": "Include the complete trip",
+            },
+        }
+        llm = _fake_llm("Plan on an indicative total range in LKR.")
+
+        with patch("agents.nodes.get_agent_llm", return_value=llm):
+            result = await trip_budget_node(state)
+
+        assert result["guided_intake"]["status"] == "completed"
+        assert result["activity"] == ActivityState.RESPONDING
+        assert result["messages"][0].content.startswith("Plan on")
+        request = llm.ainvoke.await_args.args[0][-1].content
+        assert "How much is a week in Singapore?" in request
+        assert "Sri Lanka and LKR" in request
+        assert "Include the complete trip" in request
+        assert "comfortable mid-range" in request
 
 
 class TestMultiServerSpecialist:

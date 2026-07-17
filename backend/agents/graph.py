@@ -20,6 +20,7 @@ from agents.nodes import (
     itinerary_node,
     location_node,
     route_from_intent,
+    trip_budget_node,
     weather_node,
 )
 
@@ -35,6 +36,7 @@ def build_graph():
     builder.add_node("weather", weather_node)
     builder.add_node("currency", currency_node)
     builder.add_node("location", location_node)
+    builder.add_node("trip_budget", trip_budget_node)
     builder.add_node("clarify", clarify_node)
 
     builder.add_edge(START, "classify_intent")
@@ -49,6 +51,7 @@ def build_graph():
             Intent.WEATHER.value: "weather",
             Intent.CURRENCY.value: "currency",
             Intent.LOCATION.value: "location",
+            Intent.TRIP_BUDGET.value: "trip_budget",
             Intent.CLARIFY.value: "clarify",
             Intent.END.value: END,
         },
@@ -60,6 +63,7 @@ def build_graph():
     builder.add_edge("weather", END)
     builder.add_edge("currency", END)
     builder.add_edge("location", END)
+    builder.add_edge("trip_budget", END)
     builder.add_edge("clarify", END)
 
     # MemorySaver gives per-thread (per session_id) conversation memory
