@@ -77,12 +77,10 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("button", { name: "Export or share conversation" })).toHaveTextContent(/^$/)
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
     expect(screen.getByText("Trip context")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Search flights" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Search hotels" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Plan itinerary" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Check weather" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Convert currency" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Find places" })).toBeInTheDocument()
+    expect(screen.queryByText("Quick actions")).not.toBeInTheDocument()
+    expect(screen.getByRole("complementary", { name: "Trip status" })).toHaveClass(
+      "overflow-y-auto",
+    )
     expect(
       screen.getByText(
         "Travel availability and prices can change. Verify important details before booking.",
@@ -157,24 +155,6 @@ describe("TripWeaverApp", () => {
 
     await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))
     expect(screen.getByRole("dialog", { name: "Trip status" })).toBeInTheDocument()
-  })
-
-  it("prefills a supported quick action and streams a real chat response", async () => {
-    const user = userEvent.setup()
-    renderApp()
-
-    await user.click(screen.getByRole("button", { name: "Search flights" }))
-    const composer = screen.getByRole("textbox", { name: "Message TripWeaver" })
-    expect(composer).toHaveValue("Help me search for flights.")
-
-    await user.click(screen.getByRole("button", { name: "Send message" }))
-
-    expect(await screen.findByText("I found two flight options.")).toBeInTheDocument()
-    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0)
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/chat",
-      expect.objectContaining({ method: "POST" }),
-    )
   })
 
   it("submits a structured quick reply once", async () => {

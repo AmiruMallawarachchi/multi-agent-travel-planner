@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { accountToken, backendHeaders, backendUrl } from "../../_tripweaver-backend"
+import { readJsonObject, responseDetail } from "@/lib/http-response"
 
 export async function GET() {
   const token = await accountToken()
@@ -13,7 +14,13 @@ export async function GET() {
     headers: backendHeaders(token),
     cache: "no-store",
   })
-  const body = await response.json()
-  return NextResponse.json(body, { status: response.status })
+  const body = await readJsonObject(response)
+  if (!response.ok) {
+    return NextResponse.json(
+      { detail: responseDetail(body, "The account service is temporarily unavailable") },
+      { status: response.status },
+    )
+  }
+  return NextResponse.json(body)
 }
 

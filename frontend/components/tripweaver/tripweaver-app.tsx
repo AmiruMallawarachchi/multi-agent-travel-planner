@@ -49,6 +49,7 @@ import type {
 } from "@/features/tripweaver/types"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
 import { cn } from "@/lib/utils"
+import { readJsonObject } from "@/lib/http-response"
 
 const DEFAULT_SETTINGS: TripWeaverSettings = {
   autoSave: true,
@@ -366,14 +367,19 @@ export function TripWeaverApp() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     })
-    const body = (await response.json()) as { user?: AccountUser; detail?: string }
-    if (!response.ok || !body.user) {
-      throw new Error(body.detail ?? "Could not authenticate")
+    const body = await readJsonObject(response)
+    const user = body.user as AccountUser | undefined
+    if (!response.ok || !user) {
+      throw new Error(
+        typeof body.detail === "string"
+          ? body.detail
+          : "The account service is temporarily unavailable. Please try again.",
+      )
     }
-    setAccount(body.user)
+    setAccount(user)
     setAuthMode(null)
     toast.success(mode === "register" ? "Account created" : "Signed in")
-    await loadAccountWorkspace(body.user.name)
+    await loadAccountWorkspace(user.name)
   }
 
   async function signOut() {
@@ -741,14 +747,7 @@ export function TripWeaverApp() {
   )
 
   const statusPanel = (
-    <StatusPanel
-      runtime={state.runtime}
-      tripContext={activeConversation.tripContext}
-      onQuickAction={(prompt) => {
-        setInput(prompt)
-        setStatusOpen(false)
-      }}
-    />
+    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} />
   )
 
   return (
@@ -821,10 +820,10 @@ export function TripWeaverApp() {
       </Sheet>
 
       <Sheet open={statusOpen} onOpenChange={setStatusOpen}>
-        <SheetContent side="right" className="w-[min(94vw,360px)] gap-0 overflow-y-auto p-0">
+        <SheetContent side="right" className="w-[min(94vw,360px)] gap-0 overflow-hidden p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Trip status</SheetTitle>
-            <SheetDescription>Live tools, trip context, and quick actions.</SheetDescription>
+            <SheetDescription>Live tools and current trip context.</SheetDescription>
           </SheetHeader>
           {statusPanel}
         </SheetContent>
