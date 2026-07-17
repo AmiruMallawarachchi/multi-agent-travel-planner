@@ -24,8 +24,10 @@ export function SolLunaToggle() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-8 gap-1.5 rounded-md px-1.5 text-xs font-semibold",
-              !isLuna && "bg-background/70 text-foreground shadow-sm hover:bg-background/80",
+              "relative h-8 gap-1.5 rounded-md border border-transparent px-2 text-xs font-semibold transition-[background-color,border-color,box-shadow,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
+              !isLuna
+                ? "border-amber-600/70 bg-amber-100/95 text-amber-950 shadow-[0_2px_12px_rgba(180,83,9,0.22),inset_0_-2px_0_rgba(217,119,6,0.75)] hover:bg-amber-50"
+                : "text-foreground/80 hover:border-amber-500/50 hover:bg-amber-100/70 hover:text-amber-950 dark:hover:bg-amber-300/15 dark:hover:text-amber-100",
             )}
             aria-pressed={!isLuna}
             onClick={() => setTheme("light")}
@@ -43,8 +45,10 @@ export function SolLunaToggle() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-8 gap-1.5 rounded-md px-1.5 text-xs font-semibold",
-              isLuna && "bg-background/70 text-foreground shadow-sm hover:bg-background/80",
+              "relative h-8 gap-1.5 rounded-md border border-transparent px-2 text-xs font-semibold transition-[background-color,border-color,box-shadow,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
+              isLuna
+                ? "border-cyan-200/70 bg-slate-950/90 text-cyan-50 shadow-[0_2px_12px_rgba(8,145,178,0.3),inset_0_-2px_0_rgba(103,232,249,0.75)] hover:bg-slate-900"
+                : "text-foreground/80 hover:border-indigo-500/50 hover:bg-indigo-100/75 hover:text-indigo-950 dark:hover:bg-indigo-300/15 dark:hover:text-indigo-100",
             )}
             aria-pressed={isLuna}
             onClick={() => setTheme("dark")}

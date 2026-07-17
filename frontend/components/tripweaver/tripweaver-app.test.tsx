@@ -83,6 +83,11 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("button", { name: "Check weather" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Convert currency" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Find places" })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Travel availability and prices can change. Verify important details before booking.",
+      ),
+    ).toHaveClass("text-slate-800/95", "dark:text-slate-200/90")
     await waitFor(() => expect(screen.getByText("Backend online")).toBeInTheDocument())
   })
 
@@ -90,11 +95,30 @@ describe("TripWeaverApp", () => {
     const user = userEvent.setup()
     renderApp()
 
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "SOL" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      )
+      expect(screen.getByRole("button", { name: "LUNA" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      )
+    })
+
     await user.click(screen.getByRole("button", { name: "LUNA" }))
 
     await waitFor(() => {
       expect(document.documentElement).toHaveClass("dark")
       expect(window.localStorage.getItem("tripweaver.theme")).toBe("dark")
+      expect(screen.getByRole("button", { name: "SOL" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      )
+      expect(screen.getByRole("button", { name: "LUNA" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      )
     })
 
     await user.click(screen.getByRole("button", { name: "Toggle trip tools" }))

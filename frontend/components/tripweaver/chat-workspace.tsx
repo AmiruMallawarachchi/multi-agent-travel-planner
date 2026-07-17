@@ -524,7 +524,7 @@ export function ChatWorkspace({
             </div>
           </div>
         </form>
-        <p className="mt-1 text-center text-[10px] text-muted-foreground sm:text-[11px]">
+        <p className="mt-1 text-center text-[10px] font-medium text-slate-800/95 drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)] dark:text-slate-200/90 dark:drop-shadow-[0_1px_1px_rgba(0,0,0,0.75)] sm:text-[11px]">
           Travel availability and prices can change. Verify important details before booking.
         </p>
       </div>
