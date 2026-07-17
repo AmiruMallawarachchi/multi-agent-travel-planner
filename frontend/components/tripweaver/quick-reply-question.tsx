@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowUp } from "lucide-react"
+import { ArrowRight, ArrowUp, Check, Pencil } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,35 +35,47 @@ export function QuickReplyQuestion({
 
   return (
     <div className="glass-divider mt-3 border-t pt-3" aria-label="Suggested answers">
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
+      <div className="space-y-1" role="group" aria-label="Answer choices">
+        {options.map((option, index) => (
           <Button
             key={option.id}
             type="button"
             variant="outline"
-            size="sm"
             className={cn(
-              "glass-control glass-interactive min-h-10 rounded-lg px-3 text-left",
-              answeredValue === option.value && "border-ring bg-accent text-accent-foreground",
+              "glass-control glass-interactive h-auto min-h-11 w-full justify-start gap-3 rounded-lg px-2.5 py-2 text-left",
+              answeredValue === option.value &&
+                "border-ring bg-accent text-accent-foreground opacity-100",
             )}
+            aria-label={option.label}
             aria-pressed={answeredValue === option.value}
             disabled={disabled || isAnswered}
             onClick={() => onAnswer(option.value)}
           >
-            {option.label}
+            <span className="glass-control flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold">
+              {index + 1}
+            </span>
+            <span className="min-w-0 flex-1 whitespace-normal">{option.label}</span>
+            {answeredValue === option.value ? (
+              <Check className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
+            ) : (
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            )}
           </Button>
         ))}
         {allowCustomAnswer ? (
           <Button
             type="button"
             variant="outline"
-            size="sm"
-            className="glass-control glass-interactive min-h-10 rounded-lg px-3"
+            className="glass-control glass-interactive h-auto min-h-11 w-full justify-start gap-3 rounded-lg px-2.5 py-2"
+            aria-label="Something else"
             aria-expanded={customOpen}
             disabled={disabled || isAnswered}
             onClick={() => setCustomOpen((open) => !open)}
           >
-            Other
+            <span className="glass-control flex size-7 shrink-0 items-center justify-center rounded-md">
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </span>
+            Something else
           </Button>
         ) : null}
       </div>

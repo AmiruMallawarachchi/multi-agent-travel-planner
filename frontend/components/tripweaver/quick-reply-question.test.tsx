@@ -30,7 +30,7 @@ describe("QuickReplyQuestion", () => {
       />,
     )
 
-    await user.click(screen.getByRole("button", { name: "Other" }))
+    await user.click(screen.getByRole("button", { name: "Something else" }))
     const input = screen.getByRole("textbox", { name: "Custom answer" })
     await user.type(input, "6 travellers{Enter}")
     expect(onAnswer).toHaveBeenCalledWith("6 travellers")
@@ -47,5 +47,21 @@ describe("QuickReplyQuestion", () => {
 
     expect(screen.getByRole("button", { name: "Relaxed" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Relaxed" })).toHaveAttribute("aria-pressed", "true")
+  })
+
+  it("renders choices as numbered decision rows", () => {
+    render(
+      <QuickReplyQuestion
+        options={[
+          { id: "relaxed", label: "Relaxed", value: "relaxed" },
+          { id: "balanced", label: "Balanced", value: "balanced" },
+        ]}
+        onAnswer={() => undefined}
+      />,
+    )
+
+    expect(screen.getByRole("group", { name: "Answer choices" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Relaxed" })).toHaveTextContent("1Relaxed")
+    expect(screen.getByRole("button", { name: "Balanced" })).toHaveTextContent("2Balanced")
   })
 })

@@ -97,7 +97,7 @@ Responsibilities:
 - show agent and tool lifecycle status
 - render flight, hotel, itinerary, weather, currency, and location payloads
 - derive the trip context panel from the conversation and itinerary results
-- provide quick actions, export/share, attachments, and optional speech input
+- provide guided answer choices, export/share, attachments, and optional speech input
 - adapt history and status panels to sheets on small screens
 
 `frontend/app/api/chat/route.ts` and the account proxy routes under
@@ -266,6 +266,7 @@ Every event is encoded as one JSON object in an SSE `data:` frame.
 | `tool` | `tool`, `status` | `INVOKED`, `SUCCEEDED`, or `FAILED` |
 | `result` | `result_type`, `tool`, `data` | Typed provider/domain result |
 | `token` | `content` | Assistant text fragment |
+| `quick_replies` | `options` | Structured choices for one clarifying question |
 | `error` | `message` | User-safe failure |
 | `done` | none | End of stream |
 

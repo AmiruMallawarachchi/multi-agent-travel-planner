@@ -228,15 +228,9 @@ describe("TripWeaverApp", () => {
     expect(screen.getByText("No matching conversations")).toBeInTheDocument()
   }, 15_000)
 
-  it("activates travel-intelligence quick actions and handles unsupported voice input", async () => {
+  it("handles unsupported voice input", async () => {
     const user = userEvent.setup()
     renderApp()
-
-    await user.click(screen.getByRole("button", { name: "Check weather" }))
-    expect(screen.getByRole("textbox", { name: "Message TripWeaver" })).toHaveValue(
-      "Check the weather for my trip.",
-    )
-    expect(screen.queryByText("Soon")).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Voice input" }))
     expect(await screen.findByText("Voice input is not supported by this browser")).toBeInTheDocument()

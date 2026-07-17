@@ -96,6 +96,18 @@ class TokenEvent(BaseModel):
     content: str
 
 
+class QuickReplyOption(BaseModel):
+    id: str
+    label: str
+    value: str
+
+
+class QuickRepliesEvent(BaseModel):
+    type: Literal["quick_replies"] = "quick_replies"
+    options: list[QuickReplyOption]
+    allow_custom_answer: bool = True
+
+
 class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
     message: str
@@ -111,6 +123,7 @@ StreamEvent = (
     | ToolEvent
     | ResultEvent
     | TokenEvent
+    | QuickRepliesEvent
     | ErrorEvent
     | DoneEvent
 )
