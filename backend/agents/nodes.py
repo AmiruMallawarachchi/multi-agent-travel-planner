@@ -18,10 +18,17 @@ from __future__ import annotations
 
 from datetime import date
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.entity import ActivityState, Intent, TripWeaverState
 from agents.history import recent_history
+from agents.guided_intake import (
+    is_trip_budget_request,
+    message_content,
+    question_message,
+    record_trip_budget_answer,
+    start_trip_budget_intake,
+)
 from agents.llm import get_agent_llm, get_router_llm
 from agents.prompts import (
     CLARIFYING_PROMPT,
@@ -32,6 +39,7 @@ from agents.prompts import (
     INTENT_CLASSIFIER_PROMPT,
     ITINERARY_AGENT_SYSTEM_PROMPT,
     LOCATION_AGENT_SYSTEM_PROMPT,
+    TRIP_BUDGET_SYSTEM_PROMPT,
     WEATHER_AGENT_SYSTEM_PROMPT,
 )
 from agents.mcp_client import ServerName
@@ -46,7 +54,6 @@ VALID_INTENTS = {i.value for i in Intent}
 # SerpApi can return dozens of offers; only ever surface a short, decidable
 # list to the traveller and the model.
 MAX_RESULTS_SHOWN = 5
-
 
 def current_date_context() -> str:
     today = date.today().isoformat()
@@ -64,6 +71,19 @@ async def classify_intent(state: TripWeaverState) -> dict:
     """ROUTING - the graph's own job (SRS section 2): the traveller never
     names an agent, this node interprets intent and the conditional edge
     dispatches to the right specialist."""
+    intake = state.get("guided_intake")
+    if intake and intake["status"] == "collecting":
+        return {
+            "intent": Intent.TRIP_BUDGET,
+            "activity": ActivityState.ROUTING,
+        }
+
+    if is_trip_budget_request(message_content(state["messages"][-1])):
+        return {
+            "intent": Intent.TRIP_BUDGET,
+            "activity": ActivityState.ROUTING,
+        }
+
     llm = get_router_llm()
     response = await llm.ainvoke(
         [
@@ -95,6 +115,57 @@ async def general_qa_node(state: TripWeaverState) -> dict:
     return {
         "messages": [response],
         "active_agent": "general_qa",
+        "activity": ActivityState.RESPONDING,
+    }
+
+
+async def trip_budget_node(state: TripWeaverState) -> dict:
+    intake = state.get("guided_intake")
+    latest_message = message_content(state["messages"][-1]).strip()
+
+    if not intake or intake["status"] == "completed":
+        intake = start_trip_budget_intake(latest_message)
+        return {
+            "messages": [question_message(0)],
+            "guided_intake": intake,
+            "active_agent": "trip_budget",
+            "activity": ActivityState.CLARIFYING,
+        }
+
+    updated_intake, next_question = record_trip_budget_answer(
+        intake, latest_message
+    )
+    if next_question:
+        return {
+            "messages": [next_question],
+            "guided_intake": updated_intake,
+            "active_agent": "trip_budget",
+            "activity": ActivityState.CLARIFYING,
+        }
+
+    summary = "\n".join(
+        f"- {key.replace('_', ' ').title()}: {value}"
+        for key, value in updated_intake["answers"].items()
+    )
+    llm = get_agent_llm()
+    response = await llm.ainvoke(
+        [
+            SystemMessage(
+                content=f"{TRIP_BUDGET_SYSTEM_PROMPT}{current_date_context()}"
+            ),
+            HumanMessage(
+                content=(
+                    f"Original request:\n{intake['original_request']}\n\n"
+                    f"Collected answers:\n{summary}\n\n"
+                    "Create the requested travel budget estimate now."
+                )
+            ),
+        ]
+    )
+    return {
+        "messages": [response],
+        "guided_intake": updated_intake,
+        "active_agent": "trip_budget",
         "activity": ActivityState.RESPONDING,
     }
 

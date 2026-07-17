@@ -11,7 +11,7 @@ agent knows about another's work."
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Annotated, Any, Literal, Optional, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -27,6 +27,7 @@ class Intent(str, Enum):
     WEATHER = "weather"
     CURRENCY = "currency"
     LOCATION = "location"
+    TRIP_BUDGET = "trip_budget"
     CLARIFY = "clarify"
     END = "end"
 
@@ -57,6 +58,14 @@ class ToolCallRecord(TypedDict):
     detail: Optional[str]
 
 
+class GuidedIntake(TypedDict):
+    kind: Literal["trip_budget"]
+    status: Literal["collecting", "completed"]
+    step: int
+    original_request: str
+    answers: dict[str, str]
+
+
 class TripWeaverState(TypedDict):
     # Full conversation. `add_messages` is LangGraph's reducer: nodes return
     # *new* messages and LangGraph appends them, instead of every node having
@@ -72,6 +81,11 @@ class TripWeaverState(TypedDict):
     # Missing-input handling (SRS section 4 step 6 / section 7).
     missing_fields: list[str]
     clarification_question: Optional[str]
+
+    # Deterministic, one-question-at-a-time intake. Keeping this in graph
+    # state means the pending question survives across turns in the same
+    # checkpointed session and is never inferred from assistant prose.
+    guided_intake: Optional[GuidedIntake]
 
     # Findings gathered from MCP tools this turn (SRS section 3: Hotel /
     # Flight / Booking entities).
@@ -100,6 +114,7 @@ def new_state(session_id: str, user_message: str) -> dict:
         "activity": None,
         "missing_fields": [],
         "clarification_question": None,
+        "guided_intake": None,
         "hotel_results": [],
         "flight_results": [],
         "booking_confirmation": None,

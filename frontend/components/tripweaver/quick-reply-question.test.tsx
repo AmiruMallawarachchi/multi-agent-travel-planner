@@ -64,4 +64,19 @@ describe("QuickReplyQuestion", () => {
     expect(screen.getByRole("button", { name: "Relaxed" })).toHaveTextContent("1Relaxed")
     expect(screen.getByRole("button", { name: "Balanced" })).toHaveTextContent("2Balanced")
   })
+
+  it("shows guided-question progress", () => {
+    render(
+      <QuickReplyQuestion
+        options={[{ id: "all", label: "Complete trip", value: "all expenses" }]}
+        step={2}
+        totalSteps={3}
+        onAnswer={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText("Question 2 of 3")).toBeInTheDocument()
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2")
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "3")
+  })
 })
