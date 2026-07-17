@@ -217,6 +217,29 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
+## Demo checklist
+
+Before calling the project finished, run through the deployed Vercel and Render
+demo with two accounts:
+
+- Register with email/password, sign out, sign back in, and confirm the user
+  menu shows the right traveller.
+- Sign in with Google and confirm the app returns to TripWeaver with the account
+  loaded instead of showing an account-service error.
+- Create two different accounts and confirm each account sees only its own
+  conversations and plan folders.
+- Create a chat, rename it, pin and unpin it, move it into a plan folder, move
+  it back to All chats, then delete it.
+- Ask a budget question such as "I want to travel to Singapore for one week;
+  how much money do I need?" and confirm TripWeaver asks one guided question at
+  a time before producing the estimate.
+- Ask a normal place question such as "Tell me about Singapore Zoo" and confirm
+  no unrelated answer choices appear under the normal response.
+- Test one future flight search, hotel search, itinerary request, weather
+  request, currency conversion, and place search.
+- Switch SOL/LUNA, resize to mobile width, and confirm history and tools open as
+  sheets while the chat remains usable.
+
 ## Production boundaries
 
 - LangGraph memory and rate limiting are in process. Account history uses

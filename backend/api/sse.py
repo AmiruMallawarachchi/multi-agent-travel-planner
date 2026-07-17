@@ -12,7 +12,6 @@ from api.schemas import (
     DoneEvent,
     ErrorEvent,
     QuickRepliesEvent,
-    QuickReplyOption,
     ResultEvent,
     StatusEvent,
     StreamEvent,
@@ -81,63 +80,15 @@ def _tool_payload(event: dict[str, Any]) -> dict[str, Any] | None:
     return tool_result_dict(raw_output)
 
 
-def _options(*values: tuple[str, str]) -> list[QuickReplyOption]:
-    return [
-        QuickReplyOption(id=f"choice-{index}", label=label, value=value)
-        for index, (label, value) in enumerate(values, start=1)
-    ]
-
-
 def quick_replies_for_text(content: str) -> QuickRepliesEvent | None:
-    normalized = " ".join(content.lower().split())
-    if "?" not in normalized:
-        return None
+    """Avoid guessing answer choices from arbitrary model prose.
 
-    if any(term in normalized for term in ("travel date", "check-in", "check in", "departure date", "when do you")):
-        options = _options(
-            ("This weekend", "This weekend"),
-            ("Next month", "Next month"),
-            ("In three months", "In about three months"),
-            ("Dates are flexible", "My dates are flexible"),
-        )
-    elif any(term in normalized for term in ("how many travel", "how many guest", "how many adult")):
-        options = _options(
-            ("Solo", "1 traveller"),
-            ("Two people", "2 travellers"),
-            ("Family", "3 to 4 travellers"),
-            ("Group", "5 or more travellers"),
-        )
-    elif any(term in normalized for term in ("interest", "kind of trip", "activities")):
-        options = _options(
-            ("Food and culture", "Food and culture"),
-            ("Beach and relaxation", "Beaches and relaxation"),
-            ("Adventure and nature", "Adventure and nature"),
-            ("Shopping and nightlife", "Shopping and nightlife"),
-        )
-    elif "budget" in normalized:
-        options = _options(
-            ("Budget", "Keep the trip budget-friendly"),
-            ("Mid-range", "Use a comfortable mid-range budget"),
-            ("Premium", "Use a premium budget"),
-            ("Not sure yet", "My budget is not decided yet"),
-        )
-    elif any(term in normalized for term in ("pace", "busy should", "packed")):
-        options = _options(
-            ("Relaxed", "Use a relaxed pace"),
-            ("Balanced", "Use a balanced pace"),
-            ("Packed", "Fit in as much as practical"),
-            ("Decide for me", "Choose the best pace for this trip"),
-        )
-    elif any(term in normalized for term in ("one way", "round trip", "return flight")):
-        options = _options(
-            ("Round trip", "I need a round-trip flight"),
-            ("One way", "I need a one-way flight"),
-            ("Multi-city", "I need a multi-city flight"),
-        )
-    else:
-        return None
-
-    return QuickRepliesEvent(options=options)
+    Guided choices are emitted only when a graph node attaches explicit
+    ``tripweaver_quick_replies`` metadata. The old text heuristic could attach
+    unrelated options to normal answers, such as adding trip-style choices after
+    a place explanation.
+    """
+    return None
 
 
 def _guided_quick_replies(output: Any) -> tuple[str, QuickRepliesEvent] | None:

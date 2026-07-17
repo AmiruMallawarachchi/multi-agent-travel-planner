@@ -41,9 +41,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -102,6 +99,7 @@ export function ConversationSidebar({
   const groups = groupConversations(filtered.filter((conversation) => !conversation.pinned))
   const [createPlanOpen, setCreatePlanOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<Conversation | null>(null)
+  const [assignPlanTarget, setAssignPlanTarget] = useState<Conversation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null)
   const [renamePlanTarget, setRenamePlanTarget] = useState<PlanFolder | null>(null)
   const [deletePlanTarget, setDeletePlanTarget] = useState<PlanFolder | null>(null)
@@ -115,6 +113,13 @@ export function ConversationSidebar({
   function openRenamePlan(plan: PlanFolder) {
     setRenamePlanTarget(plan)
     setDialogValue(plan.name)
+  }
+
+  function assignToPlan(planId?: string) {
+    if (!assignPlanTarget) return
+    onAssignPlan(assignPlanTarget.id, planId)
+    setSelectedPlanId(planId ?? null)
+    setAssignPlanTarget(null)
   }
 
   function submitName() {
@@ -182,37 +187,10 @@ export function ConversationSidebar({
               <Pencil />
               Rename conversation
             </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Folder />
-                Add to plan
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48">
-                <DropdownMenuItem onSelect={() => onAssignPlan(conversation.id)}>
-                  {!conversation.planId ? <Check /> : <span className="size-4" />}
-                  No plan
-                </DropdownMenuItem>
-                {plans.map((plan) => (
-                  <DropdownMenuItem
-                    key={plan.id}
-                    onSelect={() => onAssignPlan(conversation.id, plan.id)}
-                  >
-                    {conversation.planId === plan.id ? <Check /> : <Folder />}
-                    <span className="truncate">{plan.name}</span>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setDialogValue("")
-                    setCreatePlanOpen(true)
-                  }}
-                >
-                  <FolderPlus />
-                  New plan
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <DropdownMenuItem onSelect={() => setAssignPlanTarget(conversation)}>
+              <Folder />
+              Add to plan
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(conversation)}>
               <Trash2 />
@@ -394,6 +372,72 @@ export function ConversationSidebar({
             }}>Cancel</Button>
             <Button disabled={!dialogValue.trim()} onClick={submitName}>
               {createPlanOpen ? "Create" : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(assignPlanTarget)}
+        onOpenChange={(open) => {
+          if (!open) setAssignPlanTarget(null)
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add to plan</DialogTitle>
+            <DialogDescription>
+              Choose where to group &quot;{assignPlanTarget?.title}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="glass-control h-10 w-full justify-start gap-2 rounded-md"
+              onClick={() => assignToPlan()}
+            >
+              {!assignPlanTarget?.planId ? <Check aria-hidden="true" /> : <MessagesSquare aria-hidden="true" />}
+              All chats
+            </Button>
+            {plans.length > 0 ? (
+              plans.map((plan) => {
+                const selected = assignPlanTarget?.planId === plan.id
+                const count = history.filter((conversation) => conversation.planId === plan.id).length
+                return (
+                  <Button
+                    key={plan.id}
+                    type="button"
+                    variant="outline"
+                    className="glass-control h-10 w-full justify-start gap-2 rounded-md"
+                    onClick={() => assignToPlan(plan.id)}
+                  >
+                    {selected ? <Check aria-hidden="true" /> : <Folder aria-hidden="true" />}
+                    <span className="min-w-0 flex-1 truncate text-left">{plan.name}</span>
+                    <span className="text-xs text-muted-foreground">{count}</span>
+                  </Button>
+                )
+              })
+            ) : (
+              <p className="rounded-md border border-border/60 bg-background/30 px-3 py-2 text-sm text-muted-foreground">
+                No plan folders yet.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignPlanTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAssignPlanTarget(null)
+                setDialogValue("")
+                setCreatePlanOpen(true)
+              }}
+            >
+              <FolderPlus aria-hidden="true" />
+              New plan
             </Button>
           </DialogFooter>
         </DialogContent>

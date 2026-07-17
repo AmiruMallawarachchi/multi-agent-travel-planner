@@ -121,24 +121,14 @@ def test_stream_events_from_graph_event_hides_router_model_output():
     assert list(stream_events_from_graph_event(event)) == []
 
 
-def test_model_end_emits_numbered_choices_for_one_planning_question():
+def test_model_end_does_not_guess_choices_from_plain_model_text():
     event = {
         "event": "on_chat_model_end",
         "metadata": {"langgraph_node": "itinerary"},
         "data": {"output": Chunk("How many travellers will join this trip?")},
     }
 
-    events = list(stream_events_from_graph_event(event))
-
-    assert len(events) == 1
-    assert isinstance(events[0], QuickRepliesEvent)
-    assert [option.label for option in events[0].options] == [
-        "Solo",
-        "Two people",
-        "Family",
-        "Group",
-    ]
-    assert events[0].allow_custom_answer is True
+    assert list(stream_events_from_graph_event(event)) == []
 
 
 def test_guided_intake_emits_exact_question_progress_and_choices():
@@ -203,6 +193,12 @@ def test_final_guided_answer_switches_from_intake_to_response_status():
 
 def test_quick_reply_detection_ignores_statements_and_tool_call_rounds():
     assert quick_replies_for_text("Your itinerary is ready.") is None
+    assert (
+        quick_replies_for_text(
+            "The Singapore Zoo is wonderful. Would you like directions or ticket help?"
+        )
+        is None
+    )
     output = Chunk("What is your budget?")
     output.tool_calls = [{"name": "create_itinerary"}]
     assert list(
