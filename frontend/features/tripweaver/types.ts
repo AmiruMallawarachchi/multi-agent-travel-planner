@@ -45,6 +45,18 @@ export interface ToolActivity {
   status: ToolStatus
 }
 
+export interface QuickReplyOption {
+  id: string
+  label: string
+  value: string
+}
+
+export interface QuickReplies {
+  options: QuickReplyOption[]
+  allowCustomAnswer?: boolean
+  answeredValue?: string
+}
+
 export interface ChatMessage {
   id: string
   role: MessageRole
@@ -53,6 +65,7 @@ export interface ChatMessage {
   attachments?: Pick<Attachment, "id" | "name" | "type" | "size">[]
   tools?: ToolActivity[]
   results?: StructuredResult[]
+  quickReplies?: QuickReplies
 }
 
 export interface TripContext {
@@ -71,6 +84,15 @@ export interface Conversation {
   updatedAt: string
   messages: ChatMessage[]
   tripContext: TripContext
+  pinned?: boolean
+  planId?: string
+}
+
+export interface PlanFolder {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ServiceState {

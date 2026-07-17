@@ -264,6 +264,21 @@ export function applyStreamEvent(
       ),
     }
     runtime = { ...runtime, activity: "Writing response" }
+  } else if (event.type === "quick_replies") {
+    conversation = {
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        message.id === assistantMessageId
+          ? {
+              ...message,
+              quickReplies: {
+                options: event.options,
+                allowCustomAnswer: event.allow_custom_answer,
+              },
+            }
+          : message,
+      ),
+    }
   } else if (event.type === "error") {
     conversation = {
       ...conversation,

@@ -15,6 +15,7 @@ htmlcov/
 node_modules/
 .next/
 out/
+.vercel/
 next-env.d.ts
 *.tsbuildinfo
 
@@ -29,4 +30,3 @@ skills-lock.json
 *.log
 *.sqlite
 *.sqlite3
-.vercel

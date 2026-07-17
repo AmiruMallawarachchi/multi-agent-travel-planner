@@ -1,7 +1,15 @@
 "use client"
 
 import Image from "next/image"
-import { CircleHelp, Clock3, LogIn, LogOut, Settings2, UserPlus } from "lucide-react"
+import {
+  CircleHelp,
+  History,
+  LogIn,
+  LogOut,
+  PanelRight,
+  Settings2,
+  UserPlus,
+} from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -15,14 +23,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { AuthMode } from "@/components/tripweaver/auth-dialog"
+import { SolLunaToggle } from "@/components/tripweaver/sol-luna-toggle"
 import type { AccountUser } from "@/features/tripweaver/types"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface AppHeaderProps {
   account: AccountUser | null
   backendOnline: boolean
   onOpenAuth: (mode: AuthMode) => void
   onOpenHelp: () => void
-  onOpenHistory: () => void
+  historyOpen: boolean
+  toolsOpen: boolean
+  onToggleHistory: () => void
+  onToggleTools: () => void
   onOpenSettings: () => void
   onSignOut: () => void
 }
@@ -40,31 +53,34 @@ function initials(account: AccountUser | null) {
 export function AppHeader({
   account,
   backendOnline,
+  historyOpen,
+  toolsOpen,
   onOpenAuth,
   onOpenHelp,
-  onOpenHistory,
+  onToggleHistory,
+  onToggleTools,
   onOpenSettings,
   onSignOut,
 }: AppHeaderProps) {
   return (
-    <header className="glass-panel glass-divider relative z-30 grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center rounded-[18px] px-2 sm:h-[70px] sm:px-3 md:grid-cols-[270px_minmax(0,1fr)_auto]">
+    <header className="glass-panel glass-divider relative z-30 grid h-14 grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl px-2 sm:h-[58px] sm:px-3 lg:grid-cols-[250px_minmax(0,1fr)_auto]">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-        <div className="glass-control flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
+        <div className="glass-control flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
           <Image
             src="/brand/tripweaver-mark.jpg"
             alt=""
-            width={44}
-            height={44}
+            width={40}
+            height={40}
             priority
-            className="brand-art size-10 object-contain"
+            className="brand-art size-9 object-contain"
           />
         </div>
-        <span className="truncate text-base font-semibold text-foreground sm:text-lg">
+        <span className="hidden truncate text-base font-semibold text-foreground sm:block sm:text-lg">
           TripWeaver
         </span>
       </div>
 
-      <div className="hidden min-w-0 items-center justify-center gap-3 md:flex">
+      <div className="hidden min-w-0 items-center justify-center gap-3 lg:flex">
         <p className="truncate text-sm font-semibold text-foreground/90">AI Trip Planning Assistant</p>
         <Badge
           variant="outline"
@@ -79,19 +95,41 @@ export function AppHeader({
       </div>
 
       <nav className="flex items-center justify-end gap-1" aria-label="Application">
+        <SolLunaToggle />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="glass-interactive size-10 rounded-lg hover:bg-accent/60"
+              onClick={onToggleTools}
+              aria-label="Toggle trip tools"
+              aria-pressed={toolsOpen}
+            >
+              <PanelRight aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Trip tools</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="glass-interactive size-10 rounded-lg hover:bg-accent/60"
+              onClick={onToggleHistory}
+              aria-label="Toggle conversation history"
+              aria-pressed={historyOpen}
+            >
+              <History aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Conversation history</TooltipContent>
+        </Tooltip>
         <Button
           variant="ghost"
           size="icon"
-          className="glass-interactive size-11 rounded-xl hover:bg-accent/60"
-          onClick={onOpenHistory}
-          aria-label="History"
-        >
-          <Clock3 aria-hidden="true" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="glass-interactive hidden size-11 rounded-xl hover:bg-accent/60 sm:inline-flex"
+          className="glass-interactive hidden size-10 rounded-lg hover:bg-accent/60 md:inline-flex"
           onClick={onOpenSettings}
           aria-label="Settings"
         >
@@ -102,7 +140,7 @@ export function AppHeader({
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="glass-interactive h-11 gap-2 rounded-xl px-1.5 hover:bg-accent/60 sm:px-2"
+              className="glass-interactive h-10 gap-2 rounded-lg px-1.5 hover:bg-accent/60 sm:px-2"
               aria-label="User menu"
             >
               <Avatar size="sm">

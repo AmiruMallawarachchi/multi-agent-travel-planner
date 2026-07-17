@@ -91,12 +91,13 @@ Tailwind CSS, shadcn/ui, Radix primitives, and Lucide icons.
 Responsibilities:
 
 - maintain guest browser conversations, signed-in account history, and user settings
+- organize conversations into guest-local or account-backed plan folders
 - proxy chat and health calls from server routes so credentials stay server-side
 - parse backend SSE into deterministic reducer state
 - show agent and tool lifecycle status
 - render flight, hotel, itinerary, weather, currency, and location payloads
 - derive the trip context panel from the conversation and itinerary results
-- provide quick actions, export/share, attachments, and optional speech input
+- provide guided answer choices, export/share, attachments, and optional speech input
 - adapt history and status panels to sheets on small screens
 
 `frontend/app/api/chat/route.ts` and the account proxy routes under
@@ -118,11 +119,16 @@ The backend exposes:
 | `POST /session` | Generate a validated conversation session ID |
 | `POST /auth/register` | Create an account and issue an opaque account token |
 | `POST /auth/login` | Authenticate and issue an opaque account token |
+| `POST /auth/oauth` | Verify a Supabase Google identity and issue an opaque account token |
 | `POST /auth/logout` | Revoke the current account token |
 | `GET /auth/me` | Return the signed-in traveller profile |
 | `GET /conversations` | List signed-in traveller conversations |
 | `PUT /conversations/{id}` | Save one signed-in traveller conversation |
+| `DELETE /conversations/{id}` | Delete one signed-in traveller conversation |
 | `DELETE /conversations` | Clear signed-in traveller conversations |
+| `GET /plans` | List signed-in traveller plan folders |
+| `PUT /plans/{id}` | Save one signed-in traveller plan folder |
+| `DELETE /plans/{id}` | Delete a plan folder and unassign its conversations |
 | `POST /chat/stream` | Run one graph turn and stream normalized SSE events |
 | `GET /docs` | OpenAPI documentation |
 
@@ -260,6 +266,7 @@ Every event is encoded as one JSON object in an SSE `data:` frame.
 | `tool` | `tool`, `status` | `INVOKED`, `SUCCEEDED`, or `FAILED` |
 | `result` | `result_type`, `tool`, `data` | Typed provider/domain result |
 | `token` | `content` | Assistant text fragment |
+| `quick_replies` | `options` | Structured choices for one clarifying question |
 | `error` | `message` | User-safe failure |
 | `done` | none | End of stream |
 
@@ -352,6 +359,8 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
 | `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
 | `DATABASE_URL` | Optional Postgres/Supabase URL for account and conversation persistence |
+| `SUPABASE_URL` | Supabase Auth project URL used to validate social-login tokens |
+| `SUPABASE_PUBLISHABLE_KEY` | Publishable key used for server-side Supabase token validation |
 | `TRIPWEAVER_TOOL_MODE` | `mcp` for service discovery, `local` for single-service demo tools |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins |
 | `RATE_LIMIT_REQUESTS` | Requests allowed per local window |

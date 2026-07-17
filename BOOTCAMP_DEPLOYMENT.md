@@ -60,10 +60,25 @@ Supabase is used here as managed Postgres storage for:
 
 - users
 - auth sessions
+- linked Google identities
 - per-user conversation history
 
-TripWeaver still owns the register/login API. Supabase Auth is not required for
-this bootcamp deployment.
+TripWeaver still owns account records and history authorization. Supabase Auth
+is also used to verify optional Google sign-in without exposing Google secrets
+to the browser.
+
+### Google sign-in
+
+1. In Google Auth Platform, create a Web application OAuth client.
+2. Add your Vercel URL as an authorized JavaScript origin.
+3. Add `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` as an authorized
+   redirect URI.
+4. In Supabase, open Authentication -> Providers -> Google, enable the provider,
+   and enter the Google client ID and client secret.
+5. In Supabase Authentication -> URL Configuration, set the Site URL to your
+   Vercel URL and add `https://YOUR_VERCEL_URL/auth/callback` to Redirect URLs.
+
+Do not put the Google client secret in Vercel, Render, Git, or frontend code.
 
 ## 3. Render backend
 
@@ -103,6 +118,8 @@ RATE_LIMIT_REQUESTS=20
 RATE_LIMIT_WINDOW_SECONDS=60
 MAX_MESSAGE_LENGTH=2000
 TRIPWEAVER_TOOL_MODE=local
+SUPABASE_URL=your Supabase project URL
+SUPABASE_PUBLISHABLE_KEY=your Supabase publishable key
 ```
 
 Optional when live search tools are enabled:
@@ -184,6 +201,7 @@ This path supports:
 - polished responsive Next.js UI on Vercel
 - backend API on Render
 - user registration and login
+- optional Google sign-in through Supabase Auth
 - per-user conversation history persisted in Supabase Postgres
 - server-side proxying so browser users never receive backend API keys
 - OpenAI-backed general chat when `OPENAI_API_KEY` has quota

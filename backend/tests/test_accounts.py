@@ -3,8 +3,10 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import main
+from api import routes
 from core import accounts
 from core import security
+from core.supabase_auth import ExternalIdentity
 
 
 def _client(monkeypatch, tmp_path) -> TestClient:
@@ -59,6 +61,60 @@ def test_register_login_me_and_logout(monkeypatch, tmp_path):
     assert client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
 
+def test_google_login_links_verified_email_to_existing_account(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    registered = _register(client, "traveller@example.com")
+
+    async def verified_identity(_access_token: str) -> ExternalIdentity:
+        return ExternalIdentity(
+            provider="google",
+            subject="google-user-123",
+            email="traveller@example.com",
+            name="Google Traveller",
+        )
+
+    monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
+    response = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "verified-access-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == registered["user"]["id"]
+    google_token = response.json()["token"]
+    assert client.get(
+        "/conversations", headers={"Authorization": f"Bearer {google_token}"}
+    ).json() == {"conversations": []}
+
+
+def test_google_login_reuses_identity_without_creating_duplicate_user(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+
+    async def verified_identity(_access_token: str) -> ExternalIdentity:
+        return ExternalIdentity(
+            provider="google",
+            subject="google-user-456",
+            email="new@example.com",
+            name="New Traveller",
+        )
+
+    monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
+    first = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "first-verified-token"},
+    ).json()
+    second = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "second-verified-token"},
+    ).json()
+
+    assert first["user"]["id"] == second["user"]["id"]
+    assert second["user"]["name"] == "New Traveller"
+
+
 def test_conversations_are_private_to_the_authenticated_user(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
     first = _register(client, "first@example.com")
@@ -106,6 +162,42 @@ def test_conversations_are_private_to_the_authenticated_user(monkeypatch, tmp_pa
     assert second_history.status_code == 200
     assert second_history.json()["conversations"] == []
 
+    second_trip = {
+        **conversation,
+        "id": "trip-2",
+        "title": "Paris plan",
+        "updatedAt": "2026-07-14T10:02:00.000Z",
+    }
+    assert (
+        client.put(
+            "/conversations/trip-2",
+            headers={"Authorization": f"Bearer {first['token']}"},
+            json={"conversation": second_trip},
+        ).status_code
+        == 200
+    )
+
+    deleted = client.delete(
+        "/conversations/trip-1",
+        headers={"Authorization": f"Bearer {first['token']}"},
+    )
+    assert deleted.status_code == 200
+    assert deleted.json() == {"ok": True, "deleted": True}
+    assert [
+        item["id"]
+        for item in client.get(
+            "/conversations",
+            headers={"Authorization": f"Bearer {first['token']}"},
+        ).json()["conversations"]
+    ] == ["trip-2"]
+    assert (
+        client.delete(
+            "/conversations/trip-2",
+            headers={"Authorization": f"Bearer {second['token']}"},
+        ).json()["deleted"]
+        is False
+    )
+
     cleared = client.delete(
         "/conversations", headers={"Authorization": f"Bearer {first['token']}"}
     )
@@ -128,6 +220,55 @@ def test_conversation_routes_require_account_session(monkeypatch, tmp_path):
         ).status_code
         == 401
     )
+    assert client.delete("/conversations/trip-1").status_code == 401
+
+
+def test_plans_are_private_and_deletion_unassigns_conversations(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    first = _register(client, "planner@example.com")
+    second = _register(client, "other@example.com")
+    first_headers = {"Authorization": f"Bearer {first['token']}"}
+    second_headers = {"Authorization": f"Bearer {second['token']}"}
+    plan = {
+        "id": "japan-plan",
+        "name": "Japan 2027",
+        "createdAt": "2026-07-16T08:00:00.000Z",
+        "updatedAt": "2026-07-16T08:00:00.000Z",
+    }
+
+    saved = client.put("/plans/japan-plan", headers=first_headers, json={"plan": plan})
+    assert saved.status_code == 200
+    assert saved.json()["plan"]["name"] == "Japan 2027"
+    assert client.get("/plans", headers=first_headers).json()["plans"] == [plan]
+    assert client.get("/plans", headers=second_headers).json()["plans"] == []
+
+    conversation = {
+        "id": "tokyo-chat",
+        "title": "Tokyo ideas",
+        "planId": "japan-plan",
+        "createdAt": "2026-07-16T08:01:00.000Z",
+        "updatedAt": "2026-07-16T08:01:00.000Z",
+        "messages": [],
+        "tripContext": {},
+    }
+    assert client.put(
+        "/conversations/tokyo-chat",
+        headers=first_headers,
+        json={"conversation": conversation},
+    ).status_code == 200
+
+    assert client.delete("/plans/japan-plan", headers=second_headers).json()["deleted"] is False
+    assert client.delete("/plans/japan-plan", headers=first_headers).json() == {
+        "ok": True,
+        "deleted": True,
+    }
+    assert client.get("/plans", headers=first_headers).json()["plans"] == []
+    stored_chat = client.get("/conversations", headers=first_headers).json()["conversations"][0]
+    assert "planId" not in stored_chat
+
+
+def test_plan_routes_require_account_session(monkeypatch, tmp_path):
+    assert _client(monkeypatch, tmp_path).get("/plans").status_code == 401
 
 
 def test_database_url_selects_postgres_sql(monkeypatch):

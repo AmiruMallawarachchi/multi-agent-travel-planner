@@ -145,6 +145,26 @@ def _ensure_schema(connection: _Connection) -> None:
             PRIMARY KEY (id, user_id)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS auth_identities (
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (provider, subject)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS plans (
+            id TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (id, user_id)
+        )
+        """,
     )
     for statement in statements:
         connection.execute(statement)
@@ -216,7 +236,7 @@ def _row_to_user(row: sqlite3.Row | dict[str, Any]) -> AccountUser:
     )
 
 
-def _create_session(connection: sqlite3.Connection, user_id: str) -> str:
+def _create_session(connection: _Connection, user_id: str) -> str:
     token = secrets.token_urlsafe(32)
     now = _utc_now()
     connection.execute(
@@ -282,6 +302,70 @@ def authenticate_user(email: str, password: str) -> tuple[str, AccountUser] | No
         ).fetchone()
         if not row or not _verify_password(password, row["password_hash"]):
             return None
+        token = _create_session(connection, row["id"])
+        connection.commit()
+        return token, _row_to_user(row)
+
+
+def authenticate_external_user(
+    provider: str,
+    subject: str,
+    email: str,
+    name: str | None = None,
+) -> tuple[str, AccountUser]:
+    normalized_provider = provider.strip().lower()
+    normalized_subject = subject.strip()
+    if normalized_provider != "google":
+        raise AccountError("Unsupported identity provider")
+    if not normalized_subject or len(normalized_subject) > 255:
+        raise AccountError("Invalid identity provider subject")
+
+    normalized_email = _normalize_email(email)
+    normalized_name = _normalize_name(name, normalized_email)
+    now = _utc_now().isoformat()
+
+    with _connect() as connection:
+        row = connection.execute(
+            _sql(
+                """
+                SELECT users.*
+                FROM auth_identities
+                JOIN users ON users.id = auth_identities.user_id
+                WHERE auth_identities.provider = ? AND auth_identities.subject = ?
+                """
+            ),
+            (normalized_provider, normalized_subject),
+        ).fetchone()
+
+        if not row:
+            row = connection.execute(
+                _sql("SELECT * FROM users WHERE email = ?"), (normalized_email,)
+            ).fetchone()
+            if not row:
+                user_id = uuid.uuid4().hex
+                connection.execute(
+                    _sql(
+                        """
+                        INSERT INTO users (id, email, name, password_hash, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """
+                    ),
+                    (user_id, normalized_email, normalized_name, "external_only", now),
+                )
+                row = connection.execute(
+                    _sql("SELECT * FROM users WHERE id = ?"), (user_id,)
+                ).fetchone()
+
+            connection.execute(
+                _sql(
+                    """
+                    INSERT INTO auth_identities (provider, subject, user_id, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """
+                ),
+                (normalized_provider, normalized_subject, row["id"], now),
+            )
+
         token = _create_session(connection, row["id"])
         connection.commit()
         return token, _row_to_user(row)
@@ -371,4 +455,102 @@ def clear_user_conversations(user_id: str) -> None:
             _sql("DELETE FROM conversations WHERE user_id = ?"), (user_id,)
         )
         connection.commit()
+
+
+def delete_user_conversation(user_id: str, conversation_id: str) -> bool:
+    normalized_id = conversation_id.strip()
+    if not normalized_id or len(normalized_id) > 128:
+        raise AccountError("Conversation id is required")
+    with _connect() as connection:
+        cursor = connection.execute(
+            _sql("DELETE FROM conversations WHERE user_id = ? AND id = ?"),
+            (user_id, normalized_id),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def list_user_plans(user_id: str) -> list[dict[str, Any]]:
+    with _connect() as connection:
+        rows = connection.execute(
+            _sql(
+            """
+            SELECT payload
+            FROM plans
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            ),
+            (user_id,),
+        ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+
+def upsert_user_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    plan_id = str(payload.get("id", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    created_at = str(payload.get("createdAt", _utc_now().isoformat()))
+    updated_at = str(payload.get("updatedAt", created_at))
+    if not plan_id or len(plan_id) > 128:
+        raise AccountError("Plan id is required")
+    if not name:
+        raise AccountError("Plan name is required")
+    if len(name) > 80:
+        raise AccountError("Plan name must be 80 characters or fewer")
+
+    normalized = {
+        **payload,
+        "id": plan_id,
+        "name": name,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+    }
+    serialized = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+    with _connect() as connection:
+        connection.execute(
+            _sql(
+            """
+            INSERT INTO plans (id, user_id, name, payload, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id, user_id) DO UPDATE SET
+                name = excluded.name,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            ),
+            (plan_id, user_id, name, serialized, created_at, updated_at),
+        )
+        connection.commit()
+    return normalized
+
+
+def delete_user_plan(user_id: str, plan_id: str) -> bool:
+    normalized_id = plan_id.strip()
+    if not normalized_id or len(normalized_id) > 128:
+        raise AccountError("Plan id is required")
+
+    with _connect() as connection:
+        cursor = connection.execute(
+            _sql("DELETE FROM plans WHERE user_id = ? AND id = ?"),
+            (user_id, normalized_id),
+        )
+        rows = connection.execute(
+            _sql("SELECT id, payload FROM conversations WHERE user_id = ?"),
+            (user_id,),
+        ).fetchall()
+        for row in rows:
+            payload = json.loads(row["payload"])
+            if payload.get("planId") != normalized_id:
+                continue
+            payload.pop("planId", None)
+            connection.execute(
+                _sql("UPDATE conversations SET payload = ? WHERE user_id = ? AND id = ?"),
+                (
+                    json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                    user_id,
+                    row["id"],
+                ),
+            )
+        connection.commit()
+        return cursor.rowcount > 0
 
