@@ -50,6 +50,7 @@ import type {
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
 import { cn } from "@/lib/utils"
 import { readJsonObject } from "@/lib/http-response"
+import { createClient as createSupabaseClient } from "@/lib/client"
 
 const DEFAULT_SETTINGS: TripWeaverSettings = {
   autoSave: true,
@@ -235,6 +236,21 @@ export function TripWeaverApp() {
   }, [refreshAccount])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const authError = params.get("auth_error")
+    const authSuccess = params.get("auth")
+    if (authError === "google") {
+      toast.error("Google sign in could not be completed. Please try again.")
+      setAuthMode("login")
+    } else if (authSuccess === "google") {
+      toast.success("Signed in with Google")
+    } else {
+      return
+    }
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [])
+
+  useEffect(() => {
     if (!hydratedRef.current) return
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
     if (settings.autoSave) {
@@ -382,10 +398,30 @@ export function TripWeaverApp() {
     await loadAccountWorkspace(user.name)
   }
 
+  async function signInWithGoogle() {
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
+      throw new Error("Google sign in is not configured for this deployment")
+    }
+    const { error } = await createSupabaseClient().auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    })
+    if (error) throw new Error(error.message)
+  }
+
   async function signOut() {
     abortRef.current?.abort()
     recognitionRef.current?.stop()
     await fetch("/api/auth/logout", { method: "POST" })
+    if (
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
+      await createSupabaseClient().auth.signOut({ scope: "local" })
+    }
     setAccount(null)
     setState(createInitialState())
     setInput("")
@@ -837,7 +873,12 @@ export function TripWeaverApp() {
         onOpenChange={setSettingsOpen}
         onSettingsChange={setSettings}
       />
-      <AuthDialog mode={authMode} onModeChange={setAuthMode} onSubmit={authenticate} />
+      <AuthDialog
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onGoogleSignIn={signInWithGoogle}
+        onSubmit={authenticate}
+      />
       <HelpCenterDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </main>
   )

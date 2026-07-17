@@ -3,8 +3,10 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import main
+from api import routes
 from core import accounts
 from core import security
+from core.supabase_auth import ExternalIdentity
 
 
 def _client(monkeypatch, tmp_path) -> TestClient:
@@ -57,6 +59,60 @@ def test_register_login_me_and_logout(monkeypatch, tmp_path):
     )
     assert logout.status_code == 200
     assert client.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+
+
+def test_google_login_links_verified_email_to_existing_account(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    registered = _register(client, "traveller@example.com")
+
+    async def verified_identity(_access_token: str) -> ExternalIdentity:
+        return ExternalIdentity(
+            provider="google",
+            subject="google-user-123",
+            email="traveller@example.com",
+            name="Google Traveller",
+        )
+
+    monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
+    response = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "verified-access-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["id"] == registered["user"]["id"]
+    google_token = response.json()["token"]
+    assert client.get(
+        "/conversations", headers={"Authorization": f"Bearer {google_token}"}
+    ).json() == {"conversations": []}
+
+
+def test_google_login_reuses_identity_without_creating_duplicate_user(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+
+    async def verified_identity(_access_token: str) -> ExternalIdentity:
+        return ExternalIdentity(
+            provider="google",
+            subject="google-user-456",
+            email="new@example.com",
+            name="New Traveller",
+        )
+
+    monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
+    first = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "first-verified-token"},
+    ).json()
+    second = client.post(
+        "/auth/oauth",
+        headers={"X-API-Key": "test-key"},
+        json={"access_token": "second-verified-token"},
+    ).json()
+
+    assert first["user"]["id"] == second["user"]["id"]
+    assert second["user"]["name"] == "New Traveller"
 
 
 def test_conversations_are_private_to_the_authenticated_user(monkeypatch, tmp_path):

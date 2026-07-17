@@ -146,6 +146,15 @@ def _ensure_schema(connection: _Connection) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS auth_identities (
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (provider, subject)
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS plans (
             id TEXT NOT NULL,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -227,7 +236,7 @@ def _row_to_user(row: sqlite3.Row | dict[str, Any]) -> AccountUser:
     )
 
 
-def _create_session(connection: sqlite3.Connection, user_id: str) -> str:
+def _create_session(connection: _Connection, user_id: str) -> str:
     token = secrets.token_urlsafe(32)
     now = _utc_now()
     connection.execute(
@@ -293,6 +302,70 @@ def authenticate_user(email: str, password: str) -> tuple[str, AccountUser] | No
         ).fetchone()
         if not row or not _verify_password(password, row["password_hash"]):
             return None
+        token = _create_session(connection, row["id"])
+        connection.commit()
+        return token, _row_to_user(row)
+
+
+def authenticate_external_user(
+    provider: str,
+    subject: str,
+    email: str,
+    name: str | None = None,
+) -> tuple[str, AccountUser]:
+    normalized_provider = provider.strip().lower()
+    normalized_subject = subject.strip()
+    if normalized_provider != "google":
+        raise AccountError("Unsupported identity provider")
+    if not normalized_subject or len(normalized_subject) > 255:
+        raise AccountError("Invalid identity provider subject")
+
+    normalized_email = _normalize_email(email)
+    normalized_name = _normalize_name(name, normalized_email)
+    now = _utc_now().isoformat()
+
+    with _connect() as connection:
+        row = connection.execute(
+            _sql(
+                """
+                SELECT users.*
+                FROM auth_identities
+                JOIN users ON users.id = auth_identities.user_id
+                WHERE auth_identities.provider = ? AND auth_identities.subject = ?
+                """
+            ),
+            (normalized_provider, normalized_subject),
+        ).fetchone()
+
+        if not row:
+            row = connection.execute(
+                _sql("SELECT * FROM users WHERE email = ?"), (normalized_email,)
+            ).fetchone()
+            if not row:
+                user_id = uuid.uuid4().hex
+                connection.execute(
+                    _sql(
+                        """
+                        INSERT INTO users (id, email, name, password_hash, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """
+                    ),
+                    (user_id, normalized_email, normalized_name, "external_only", now),
+                )
+                row = connection.execute(
+                    _sql("SELECT * FROM users WHERE id = ?"), (user_id,)
+                ).fetchone()
+
+            connection.execute(
+                _sql(
+                    """
+                    INSERT INTO auth_identities (provider, subject, user_id, created_at)
+                    VALUES (?, ?, ?, ?)
+                    """
+                ),
+                (normalized_provider, normalized_subject, row["id"], now),
+            )
+
         token = _create_session(connection, row["id"])
         connection.commit()
         return token, _row_to_user(row)

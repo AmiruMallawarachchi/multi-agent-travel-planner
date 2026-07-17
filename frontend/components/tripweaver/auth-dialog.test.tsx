@@ -11,6 +11,7 @@ describe("AuthDialog", () => {
       <AuthDialog
         mode="register"
         onModeChange={vi.fn()}
+        onGoogleSignIn={vi.fn()}
         onSubmit={vi.fn()}
       />,
     )
@@ -35,11 +36,28 @@ describe("AuthDialog", () => {
       <AuthDialog
         mode="register"
         onModeChange={vi.fn()}
+        onGoogleSignIn={vi.fn()}
         onSubmit={vi.fn()}
       />,
     )
 
     await user.type(screen.getByLabelText("Password"), "short")
     expect(screen.getByText("Weak password")).toBeInTheDocument()
+  })
+
+  it("starts Google sign in from either account mode", async () => {
+    const user = userEvent.setup()
+    const onGoogleSignIn = vi.fn().mockResolvedValue(undefined)
+    render(
+      <AuthDialog
+        mode="login"
+        onModeChange={vi.fn()}
+        onGoogleSignIn={onGoogleSignIn}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Continue with Google" }))
+    expect(onGoogleSignIn).toHaveBeenCalledOnce()
   })
 })

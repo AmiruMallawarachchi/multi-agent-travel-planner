@@ -119,6 +119,7 @@ The backend exposes:
 | `POST /session` | Generate a validated conversation session ID |
 | `POST /auth/register` | Create an account and issue an opaque account token |
 | `POST /auth/login` | Authenticate and issue an opaque account token |
+| `POST /auth/oauth` | Verify a Supabase Google identity and issue an opaque account token |
 | `POST /auth/logout` | Revoke the current account token |
 | `GET /auth/me` | Return the signed-in traveller profile |
 | `GET /conversations` | List signed-in traveller conversations |
@@ -357,6 +358,8 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
 | `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
 | `DATABASE_URL` | Optional Postgres/Supabase URL for account and conversation persistence |
+| `SUPABASE_URL` | Supabase Auth project URL used to validate social-login tokens |
+| `SUPABASE_PUBLISHABLE_KEY` | Publishable key used for server-side Supabase token validation |
 | `TRIPWEAVER_TOOL_MODE` | `mcp` for service discovery, `local` for single-service demo tools |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins |
 | `RATE_LIMIT_REQUESTS` | Requests allowed per local window |

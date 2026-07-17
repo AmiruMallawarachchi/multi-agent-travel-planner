@@ -16,6 +16,7 @@ from api.schemas import (
     ChatRequest,
     ConversationSyncRequest,
     ConversationsResponse,
+    ExternalAuthRequest,
     HealthResponse,
     LoginRequest,
     PlanSyncRequest,
@@ -43,6 +44,7 @@ from core.accounts import (
     AccountError,
     AccountUser,
     authenticate_user,
+    authenticate_external_user,
     clear_user_conversations,
     delete_user_conversation,
     delete_user_plan,
@@ -54,6 +56,7 @@ from core.accounts import (
     upsert_user_conversation,
     upsert_user_plan,
 )
+from core.supabase_auth import ExternalAuthError, verify_supabase_google_token
 
 logger = logging.getLogger("tripweaver")
 router = APIRouter()
@@ -104,6 +107,28 @@ async def login(
     if not authenticated:
         raise HTTPException(401, "Invalid email or password")
     token, user = authenticated
+    return AuthResponse(token=token, user=_user_response(user))
+
+
+@router.post("/auth/oauth", response_model=AuthResponse)
+async def oauth_login(
+    payload: ExternalAuthRequest,
+    request: Request,
+    api_key: str = Depends(require_api_key),
+) -> AuthResponse:
+    check_rate_limit(client_identity(request, api_key))
+    try:
+        identity = await verify_supabase_google_token(payload.access_token)
+        token, user = authenticate_external_user(
+            identity.provider,
+            identity.subject,
+            identity.email,
+            identity.name,
+        )
+    except ExternalAuthError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except AccountError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return AuthResponse(token=token, user=_user_response(user))
 
 

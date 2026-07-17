@@ -33,6 +33,10 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=256)
 
 
+class ExternalAuthRequest(BaseModel):
+    access_token: str = Field(..., min_length=16, max_length=8192)
+
+
 class UserResponse(BaseModel):
     id: str
     email: str

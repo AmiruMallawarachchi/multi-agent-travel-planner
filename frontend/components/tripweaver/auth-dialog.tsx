@@ -40,15 +40,17 @@ function passwordStrength(password: string): PasswordStrength | null {
 interface AuthDialogProps {
   mode: AuthMode | null
   onModeChange: (mode: AuthMode | null) => void
+  onGoogleSignIn: () => Promise<void>
   onSubmit: (mode: AuthMode, payload: { email: string; password: string; name?: string }) => Promise<void>
 }
 
-export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
+export function AuthDialog({ mode, onModeChange, onGoogleSignIn, onSubmit }: AuthDialogProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [googleSubmitting, setGoogleSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const isRegister = mode === "register"
   const strength = isRegister ? passwordStrength(password) : null
@@ -57,6 +59,7 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
     if (!mode) {
       setError(null)
       setSubmitting(false)
+      setGoogleSubmitting(false)
       setPassword("")
       setShowPassword(false)
     }
@@ -80,6 +83,18 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
     }
   }
 
+  async function signInWithGoogle() {
+    if (googleSubmitting || submitting) return
+    setError(null)
+    setGoogleSubmitting(true)
+    try {
+      await onGoogleSignIn()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not start Google sign in")
+      setGoogleSubmitting(false)
+    }
+  }
+
   return (
     <Dialog open={Boolean(mode)} onOpenChange={(open) => !open && onModeChange(null)}>
       <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-[20px] p-6 sm:p-7">
@@ -89,6 +104,32 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
             Save TripWeaver conversations to your account and continue planning from this browser.
           </DialogDescription>
         </DialogHeader>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="glass-control glass-interactive h-12 w-full rounded-xl text-sm font-semibold"
+          disabled={googleSubmitting || submitting}
+          onClick={() => void signInWithGoogle()}
+        >
+          {googleSubmitting ? (
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+          ) : (
+            <span
+              className="flex size-6 items-center justify-center rounded-full bg-white text-sm font-bold text-[#4285f4] shadow-sm"
+              aria-hidden="true"
+            >
+              G
+            </span>
+          )}
+          Continue with Google
+        </Button>
+
+        <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden="true">
+          <span className="h-px flex-1 bg-border" />
+          or continue with email
+          <span className="h-px flex-1 bg-border" />
+        </div>
 
         <form className="space-y-4" onSubmit={submit}>
           {isRegister ? (
@@ -164,7 +205,11 @@ export function AuthDialog({ mode, onModeChange, onSubmit }: AuthDialogProps) {
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          <Button className="h-11 w-full rounded-xl" type="submit" disabled={submitting}>
+          <Button
+            className="h-11 w-full rounded-xl"
+            type="submit"
+            disabled={submitting || googleSubmitting}
+          >
             {submitting ? (
               <LoaderCircle className="animate-spin" aria-hidden="true" />
             ) : isRegister ? (
