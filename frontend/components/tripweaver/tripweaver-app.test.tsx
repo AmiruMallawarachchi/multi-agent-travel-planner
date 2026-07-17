@@ -209,9 +209,10 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("button", { name: "Japan 2027, 0 chats" })).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
-    await user.hover(screen.getByText("Add to plan"))
-    await user.click(await screen.findByRole("menuitem", { name: "Japan 2027" }))
-    await user.keyboard("{Escape}")
+    await user.click(screen.getByRole("menuitem", { name: "Add to plan" }))
+    expect(screen.getByRole("dialog", { name: "Add to plan" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: /Japan 2027/ }))
+    expect(screen.getByRole("button", { name: "Japan 2027, 1 chat" })).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Actions for Plan Tokyo" }))
     await user.click(screen.getByText("Rename conversation"))
