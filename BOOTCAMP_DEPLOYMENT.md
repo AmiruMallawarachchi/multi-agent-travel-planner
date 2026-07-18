@@ -50,6 +50,11 @@ TRIPWEAVER_TOOL_MODE=mcp
 
 Do not change that production value to `local`.
 
+The injected `*_MCP_HOST` values are authoritative in a Blueprint deployment.
+They intentionally take precedence over any older `*_MCP_URL` values left on
+an existing backend service. Complete `*_MCP_URL` values are reserved for the
+manual setup described below.
+
 ### Render secrets
 
 Enter `SERPAPI_API_KEY` on `tripweaver-hotel-mcp`. The Blueprint shares that
@@ -167,6 +172,18 @@ The important evidence is:
 
 Also open `/health` on each MCP service. The `/mcp` route is a protocol
 endpoint and is not expected to render a human-friendly browser page.
+
+If only some services remain `unavailable`:
+
+1. Synchronize the Blueprint from the latest `main` commit.
+2. Confirm the affected Render service is **Live** and its own `/health`
+   endpoint returns HTTP 200.
+3. Confirm the backend contains the matching Blueprint-generated
+   `*_MCP_HOST` variable.
+4. Remove obsolete localhost or retired-service `*_MCP_URL` values to keep the
+   dashboard unambiguous, then redeploy the backend.
+5. On the free plan, open the affected service's `/health` once and allow its
+   cold start to finish before checking backend readiness again.
 
 Finally verify the frontend proxy:
 

@@ -250,6 +250,11 @@ Render injects each MCP service's `RENDER_EXTERNAL_HOSTNAME` into the backend as
 converts those hostnames to HTTPS `/mcp` URLs and connects through
 `MultiServerMCPClient` with streamable HTTP.
 
+When a generated `*_MCP_HOST` is present, it takes precedence over the matching
+`*_MCP_URL`. This prevents stale manual URLs from bypassing the service wired by
+the current Blueprint. Set complete `*_MCP_URL` values only when deploying the
+services manually and no generated host variables are available.
+
 For a manual container deployment, set the complete public URLs instead:
 
 ```text

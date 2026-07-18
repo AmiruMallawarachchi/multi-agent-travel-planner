@@ -358,7 +358,7 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `WEATHER_MCP_URL` | Weather MCP `/mcp` URL |
 | `CURRENCY_MCP_URL` | Currency MCP `/mcp` URL |
 | `LOCATION_MCP_URL` | Location MCP `/mcp` URL |
-| `*_MCP_HOST` | Render public host fallback used to construct the matching `/mcp` URL |
+| `*_MCP_HOST` | Authoritative Render Blueprint host used to construct the matching `/mcp` URL |
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
 | `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
 | `DATABASE_URL` | Optional Postgres/Supabase URL for account and conversation persistence |
