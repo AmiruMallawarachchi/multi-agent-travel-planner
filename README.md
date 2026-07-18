@@ -1,131 +1,298 @@
 # TripWeaver
 
-TripWeaver is an intent-routed, multi-agent travel planning application. A
-Next.js workspace streams responses from a FastAPI and LangGraph backend. Each
-travel capability is isolated behind its own Model Context Protocol (MCP)
-service, so agents receive only the tools they are allowed to call.
+TripWeaver is a production-shaped, MCP-based multi-agent travel planner. It combines a polished responsive Next.js interface with a FastAPI + LangGraph backend that routes each travel request to a specialist agent with only the tools it is allowed to use.
 
-The application supports flight and hotel search, itinerary construction,
-weather forecasts, currency conversion, location resolution, and local place
-search. Booking tools are demonstrations only; TripWeaver never purchases or
-reserves travel.
+The system supports account-scoped chat history, plan folders, live tool status, structured travel results, guided planning questions, and provider-backed travel research through isolated MCP/tool adapters.
 
-## Documentation
+## Live Deployment
 
-- [System architecture](./SYSTEM.md)
-- [MCP setup and provider contracts](./MCP_SETUP.md)
-- [Security model](./SECURITY.md)
-- [Production deployment](./DEPLOYMENT.md)
-- [Bootcamp Vercel + Render + Supabase deployment](./BOOTCAMP_DEPLOYMENT.md)
-- [Frontend guide](./frontend/README.md)
+| Layer | URL |
+| --- | --- |
+| Frontend | https://multi-agent-travel-planner-jet.vercel.app/ |
+| Backend | https://tripweaver-backend-9fz2.onrender.com |
+| Backend health | https://tripweaver-backend-9fz2.onrender.com/health |
+| Frontend health proxy | https://multi-agent-travel-planner-jet.vercel.app/api/health |
+| Supabase project | https://zkxzsnudgzsdqlvvinbi.supabase.co |
+| Repository | https://github.com/AmiruMallawarachchi/multi-agent-travel-planner |
 
-## Architecture
+Demo note: Render Free can sleep after inactivity. If the first request is slow or auth briefly appears unavailable, open the backend health URL once and retry after the service wakes.
+
+## What Makes It Strong
+
+- Intent-routed LangGraph orchestration with separate specialist agents.
+- Least-privilege tool binding: flight agents cannot call hotel tools, weather agents cannot call currency tools, and so on.
+- MCP-style provider isolation with a free-tier deployment mode that can collapse tools into one Render service for bootcamp demos.
+- Server-side API proxying so browser users never receive OpenAI, SerpApi, database, or backend API secrets.
+- Account-backed history and plan folders with per-user isolation.
+- Structured result rendering for flights, hotels, itineraries, weather, currency, and locations.
+- User-safe error handling for backend, provider, and auth failures.
+- Offline tests for backend contracts, frontend behavior, SSE parsing, auth flows, and provider normalization.
+
+## Architecture At A Glance
 
 ```mermaid
 flowchart LR
-    Browser[Browser] -->|HTTP| Web[Next.js frontend]
-    Web -->|server-side proxy + SSE| API[FastAPI backend]
-    API --> Graph[LangGraph router]
+    User[Traveller] --> Browser[Browser]
+    Browser --> Vercel[Next.js frontend on Vercel]
+    Vercel -->|server-side proxy with BACKEND_API_KEY| Render[FastAPI backend on Render]
+    Render --> Router[LangGraph intent router]
+    Render --> AccountStore[(Supabase Postgres)]
 
-    Graph --> General[General QA]
-    Graph --> Hotel[Hotel agent]
-    Graph --> Flight[Flight agent]
-    Graph --> Itinerary[Itinerary agent]
-    Graph --> Weather[Weather agent]
-    Graph --> Currency[Currency agent]
-    Graph --> Location[Location agent]
+    Router --> General[General travel agent]
+    Router --> Flight[Flight agent]
+    Router --> Hotel[Hotel agent]
+    Router --> Itinerary[Itinerary agent]
+    Router --> Weather[Weather agent]
+    Router --> Currency[Currency agent]
+    Router --> Location[Location agent]
 
-    Hotel --> HMCP[hotel-mcp :8001]
-    Flight --> FMCP[flight-mcp :8002]
-    Itinerary --> LMCP[location-mcp :8006]
-    Itinerary --> IMCP[itinerary-mcp :8003]
-    Weather --> WMCP[weather-mcp :8004]
-    Currency --> CMCP[currency-mcp :8005]
-    Location --> LMCP
+    Flight --> FlightTools[Flight tools]
+    Hotel --> HotelTools[Hotel tools]
+    Itinerary --> ItineraryTools[Itinerary tools]
+    Weather --> WeatherTools[Weather tools]
+    Currency --> CurrencyTools[Currency tools]
+    Location --> LocationTools[Location tools]
 
-    HMCP --> SerpApi[SerpApi]
-    FMCP --> SerpApi
-    LMCP --> SerpApi
-    LMCP --> OpenMeteoGeo[Open-Meteo geocoding]
-    WMCP --> OpenMeteo[Open-Meteo forecast]
-    CMCP --> Frankfurter[Frankfurter rates]
+    FlightTools --> SerpApi[SerpApi Google Flights]
+    HotelTools --> SerpApiHotels[SerpApi Google Hotels]
+    LocationTools --> SerpApiMaps[SerpApi Google Maps]
+    LocationTools --> OpenMeteoGeo[Open-Meteo Geocoding]
+    WeatherTools --> OpenMeteoForecast[Open-Meteo Forecast]
+    CurrencyTools --> Frankfurter[Frankfurter Rates]
 ```
 
-The repository contains the full eight-service topology: the frontend, the
-backend, and six MCP servers. For the bootcamp demo, the backend can also run
-provider tools in-process with `TRIPWEAVER_TOOL_MODE=local`, which fits the
-Vercel, Render, and Supabase demo path without standing up six extra web
-services. The backend is the only service that talks to OpenAI. The browser
-receives no OpenAI, SerpApi, database, or backend API secrets.
+## Production Topology
+
+```mermaid
+flowchart TB
+    subgraph Public
+        Browser[Browser]
+        Frontend[Vercel Next.js]
+    end
+
+    subgraph PrivateServerSide
+        Backend[Render FastAPI + LangGraph]
+        Sessions[HTTP-only account sessions]
+        Database[(Supabase Postgres)]
+    end
+
+    subgraph ToolBoundary
+        FlightMCP[Flight MCP]
+        HotelMCP[Hotel MCP]
+        ItineraryMCP[Itinerary MCP]
+        WeatherMCP[Weather MCP]
+        CurrencyMCP[Currency MCP]
+        LocationMCP[Location MCP]
+    end
+
+    Browser --> Frontend
+    Frontend -->|/api/chat, /api/auth, /api/plans| Backend
+    Backend --> Sessions
+    Backend --> Database
+    Backend --> FlightMCP
+    Backend --> HotelMCP
+    Backend --> ItineraryMCP
+    Backend --> WeatherMCP
+    Backend --> CurrencyMCP
+    Backend --> LocationMCP
+```
+
+The full production model has independent MCP services. The bootcamp/free deployment uses `TRIPWEAVER_TOOL_MODE=local`, which keeps the same tool contracts but runs adapters inside the single Render backend to avoid paying for six extra services.
+
+## Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant U as Traveller
+    participant F as Next.js frontend
+    participant B as FastAPI backend
+    participant G as LangGraph router
+    participant T as Specialist tool
+    participant P as Provider
+
+    U->>F: Send travel message
+    F->>B: POST /chat/stream with backend API key
+    B->>B: Validate, rate-limit, create session
+    B->>G: Route intent
+    G->>T: Call only allowed tool group
+    T->>P: Provider request when needed
+    P-->>T: Raw provider data
+    T-->>G: Normalized result
+    G-->>B: Agent response and tool events
+    B-->>F: SSE events and structured result payloads
+    F-->>U: Chat message, cards, status, trip context
+```
+
+## Authentication And History
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Vercel as Next.js API route
+    participant Render as FastAPI auth route
+    participant DB as Supabase Postgres
+    participant Supa as Supabase Auth
+
+    User->>Vercel: Register/login with email
+    Vercel->>Render: /auth/register or /auth/login
+    Render->>DB: Create or validate account
+    DB-->>Render: User row
+    Render-->>Vercel: Opaque TripWeaver token
+    Vercel-->>User: HTTP-only session cookie
+
+    User->>Supa: Continue with Google
+    Supa-->>Vercel: OAuth callback code
+    Vercel->>Supa: Exchange code for Supabase session
+    Vercel->>Render: /auth/oauth with Supabase access token
+    Render->>Supa: Verify token
+    Render->>DB: Link Google identity and account
+    Render-->>Vercel: Opaque TripWeaver token
+```
+
+TripWeaver does not expose database credentials, backend API keys, or account tokens to the browser bundle. The frontend stores the TripWeaver account token only in an HTTP-only cookie.
 
 ## Capabilities
 
-| Capability | Agent tools | Provider |
+| Capability | Agent/tool owner | Provider |
 | --- | --- | --- |
-| Hotels | `list_hotels`, `search_hotels`, `book_hotel` | SerpApi Google Hotels |
-| Flights | `list_flights`, `search_flights`, `book_flight` | SerpApi Google Flights |
-| Itinerary | `create_itinerary` | Deterministic local planner |
-| Weather | `get_current_weather`, `get_weather_forecast` | Open-Meteo |
-| Currency | `convert_currency`, `get_exchange_rate`, `list_supported_currencies` | Frankfurter |
-| Location | `resolve_location`, `search_places` | Open-Meteo and SerpApi Google Maps |
+| Flights | `flight` agent, flight tools | SerpApi Google Flights |
+| Hotels | `hotel` agent, hotel tools | SerpApi Google Hotels |
+| Itinerary | `itinerary` agent, deterministic planner | Local/domain logic plus places |
+| Weather | `weather` agent, weather tools | Open-Meteo |
+| Currency | `currency` agent, currency tools | Frankfurter |
+| Location/places | `location` agent, location tools | Open-Meteo + SerpApi Google Maps |
+| General travel help | `general_qa` agent | OpenAI model only |
 
-The frontend renders typed result views for flights, hotels, itineraries,
-weather, currency, and locations. It also includes guest conversation history,
-account-backed history for signed-in travellers, search, export/share,
-attachments, speech input where supported, trip context, quick actions,
-settings, responsive mobile sheets, and live service/tool state.
+Booking actions are simulated by design. TripWeaver never purchases, books, pays for, cancels, or changes real travel.
 
-## Repository layout
+## Repository Layout
 
 ```text
 backend/
-  agents/                 LangGraph state, routing, prompts, specialists, MCP adapter
-  api/                    FastAPI routes, schemas, and SSE normalization
-  core/                   auth, account storage, validation, and rate limiting
-  tests/                  backend unit and contract tests
+  agents/                 LangGraph graph, intent routing, prompts, specialist runners
+  api/                    FastAPI routes, schemas, health, auth, SSE normalization
+  core/                   API-key auth, account storage, Supabase token validation, rate limits
+  tests/                  backend tests and API contract checks
+
 frontend/
-  app/                    Next.js routes and server-side API proxies
-  components/             shadcn/ui and TripWeaver workspace components
-  features/tripweaver/    stream reducer, conversations, trip context, types
-  lib/                    shared helpers, including optional Supabase clients
+  app/                    Next.js App Router pages and server-side API proxies
+  components/             shadcn/ui components and TripWeaver workspace
+  features/tripweaver/    conversation state, stream reducer, typed travel models
+  lib/                    shared HTTP and Supabase helpers
+
 mcp_servers/
-  hotel_mcp/              SerpApi Google Hotels adapter
   flight_mcp/             SerpApi Google Flights adapter
-  itinerary_mcp/          deterministic structured itinerary planner
-  weather_mcp/            Open-Meteo weather adapter
-  currency_mcp/           Frankfurter exchange-rate adapter
-  location_mcp/           geocoding and SerpApi place search
-deploy/render/            single-service Render backend image for demos
-docker-compose.yml        local eight-service topology
-render.yaml               Render Blueprint for the bootcamp backend
+  hotel_mcp/              SerpApi Google Hotels adapter
+  itinerary_mcp/          deterministic itinerary service
+  weather_mcp/            Open-Meteo weather service
+  currency_mcp/           Frankfurter currency service
+  location_mcp/           geocoding and place-search service
+
+deploy/render/            Render Free backend Dockerfile
+SYSTEM.md                 implemented architecture and trust boundaries
+BOOTCAMP_DEPLOYMENT.md    Vercel + Render + Supabase deployment guide
+DEPLOYMENT.md             single-VM production deployment guide
 ```
 
-## Local setup
+## Environment Contract
 
-### 1. Install dependencies
+### Render backend
 
-PowerShell commands are shown below. Python 3.11 or later and Node.js 22 or
-later are recommended.
+```text
+OPENAI_API_KEY=...
+DATABASE_URL=postgresql://...
+TRIPWEAVER_API_KEYS=one-long-random-secret
+ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
+TRIPWEAVER_TOOL_MODE=local
+SUPABASE_URL=https://zkxzsnudgzsdqlvvinbi.supabase.co
+SUPABASE_PUBLISHABLE_KEY=...
+SERPAPI_API_KEY=...
+ROUTER_MODEL=gpt-4o-mini
+AGENT_MODEL=gpt-4o-mini
+RATE_LIMIT_REQUESTS=20
+RATE_LIMIT_WINDOW_SECONDS=60
+MAX_MESSAGE_LENGTH=2000
+```
+
+### Vercel frontend
+
+```text
+BACKEND_URL=https://tripweaver-backend-9fz2.onrender.com
+BACKEND_API_KEY=same-value-as-one-render-TRIPWEAVER_API_KEYS-entry
+NEXT_PUBLIC_SUPABASE_URL=https://zkxzsnudgzsdqlvvinbi.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+### Supabase
+
+Use Supabase for managed Postgres and optional Google identity verification.
+
+Important:
+
+- `DATABASE_URL` belongs only in Render.
+- `DATABASE_URL` must not be committed, pasted into frontend env, or exposed in `NEXT_PUBLIC_` variables.
+- If the database password contains special characters, use the Supabase-provided encoded URL or percent-encode the password.
+- Do not include square brackets around the password. Use `password`, not `[password]`.
+- If the database URL or password was ever pasted into chat, rotate the Supabase database password and update Render.
+
+## Current Auth Issue Checklist
+
+If the UI says the account service is temporarily unavailable while `/health` is green, the backend is alive but account persistence is failing.
+
+Check these first:
+
+1. Render `DATABASE_URL` is present.
+2. Render `DATABASE_URL` starts with `postgresql://`.
+3. The password in `DATABASE_URL` is URL encoded and has no square brackets.
+4. Render was redeployed after editing environment variables.
+5. Render logs do not show `DATABASE_URL is configured for Postgres but psycopg is not installed`.
+6. Render logs do not show `could not translate host name`, `password authentication failed`, or `connection timeout`.
+7. Vercel `BACKEND_API_KEY` exactly matches one value in Render `TRIPWEAVER_API_KEYS`.
+8. Vercel `BACKEND_URL` is `https://tripweaver-backend-9fz2.onrender.com` with no path after it.
+9. Supabase project is not paused.
+10. Supabase connection string uses the Transaction Pooler or Session Pooler string recommended by the dashboard.
+
+Expected backend health after this branch is deployed:
+
+```json
+{
+  "status": "ok",
+  "service": "tripweaver-backend",
+  "mcp_servers": {
+    "hotel-mcp": "available",
+    "flight-mcp": "available",
+    "itinerary-mcp": "available",
+    "weather-mcp": "available",
+    "currency-mcp": "available",
+    "location-mcp": "available"
+  },
+  "account_storage": {
+    "backend": "postgres",
+    "status": "available"
+  }
+}
+```
+
+If `account_storage.status` is `unavailable`, registration, login, Google login, account history, and plan folders cannot work until the Render database environment is fixed.
+
+## Local Setup
+
+### Backend
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
 python -m pip install -r backend\requirements.txt
 python -m pip install -r backend\requirements-dev.txt
-python -m pip install -r mcp_servers\hotel_mcp\requirements.txt
-python -m pip install -r mcp_servers\flight_mcp\requirements.txt
-python -m pip install -r mcp_servers\itinerary_mcp\requirements.txt
-python -m pip install -r mcp_servers\weather_mcp\requirements.txt
-python -m pip install -r mcp_servers\currency_mcp\requirements.txt
-python -m pip install -r mcp_servers\location_mcp\requirements.txt
+```
 
+### Frontend
+
+```powershell
 npm ci --prefix frontend
 ```
 
-### 2. Configure private environment files
-
-Copy each example to `.env`. Never commit the resulting files.
+### Environment files
 
 ```powershell
 Copy-Item backend\.env.example backend\.env
@@ -135,127 +302,161 @@ Copy-Item mcp_servers\flight_mcp\.env.example mcp_servers\flight_mcp\.env
 Copy-Item mcp_servers\location_mcp\.env.example mcp_servers\location_mcp\.env
 ```
 
-Set these private values:
+Never commit real `.env` files.
 
-- `OPENAI_API_KEY` in `backend/.env`.
-- The same `SERPAPI_API_KEY` in the hotel, flight, and location MCP `.env`
-  files.
-- A long random value in backend `TRIPWEAVER_API_KEYS` and the matching value
-  in frontend `BACKEND_API_KEY` for authenticated local or production use.
-- Optional `TRIPWEAVER_DB_PATH` in `backend/.env` for local account-backed
-  history. It defaults to a local SQLite file under `backend/data`.
-- Optional `DATABASE_URL` in `backend/.env` or Render for Supabase/Postgres
-  account history. When set, it takes precedence over `TRIPWEAVER_DB_PATH`.
-- Optional `NEXT_PUBLIC_SUPABASE_URL` and
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `frontend/.env` or Vercel when
-  using Supabase browser/SSR helpers. These are publishable values, not the
-  private database URL.
-
-The itinerary, weather, and currency services do not require API keys. See
-[MCP_SETUP.md](./MCP_SETUP.md) for complete provider settings.
-
-### 3. Start the services
-
-Open one terminal for each process from the repository root:
+### Run locally
 
 ```powershell
-.\.venv\Scripts\python.exe mcp_servers\hotel_mcp\server.py
-.\.venv\Scripts\python.exe mcp_servers\flight_mcp\server.py
-.\.venv\Scripts\python.exe mcp_servers\itinerary_mcp\server.py
-.\.venv\Scripts\python.exe mcp_servers\weather_mcp\server.py
-.\.venv\Scripts\python.exe mcp_servers\currency_mcp\server.py
-.\.venv\Scripts\python.exe mcp_servers\location_mcp\server.py
 .\.venv\Scripts\python.exe -m uvicorn main:app --app-dir backend --port 8000
 npm --prefix frontend run dev
 ```
 
 Open:
 
-- Application: http://localhost:3000
-- Backend API docs: http://localhost:8000/docs
-- Aggregated health: http://localhost:8000/health
+- Frontend: http://localhost:3000
+- Backend docs: http://localhost:8000/docs
+- Backend health: http://localhost:8000/health
 
-The health response reports each MCP server independently. An available health
-endpoint means the process is reachable; a provider-backed search can still
-fail when its API key, quota, or upstream provider is unavailable.
-
-### Docker Compose
-
-After the same `.env` files exist, start the complete topology with:
+For the full eight-process topology, use:
 
 ```powershell
 docker compose up --build
 ```
 
-Each service has its own `Dockerfile`. The single-VM production topology in
-[DEPLOYMENT.md](./DEPLOYMENT.md) keeps MCP services private, persists account
-history, and replaces the earlier Railway-oriented deployment path.
-
-### Bootcamp Vercel + Render + Supabase
-
-For a zero-payment demo deployment, use
-[BOOTCAMP_DEPLOYMENT.md](./BOOTCAMP_DEPLOYMENT.md). That path deploys the
-Next.js frontend to Vercel, a single FastAPI backend to Render Free, and user
-history to Supabase Postgres. The Render backend uses `TRIPWEAVER_TOOL_MODE=local`
-so the travel tools run inside one service.
-
 ## Verification
 
-The provider tests mock HTTP responses and do not spend SerpApi credits.
+Automated tests are offline and do not spend SerpApi credits.
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall backend mcp_servers frontend
-.\.venv\Scripts\python.exe -m pytest -q
-
-Push-Location backend
-..\.venv\Scripts\python.exe -m pytest -q
-Pop-Location
-
+.\.venv\Scripts\python.exe -m compileall backend mcp_servers
+.\.venv\Scripts\python.exe -m pytest backend\tests -q
 npm --prefix frontend test
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
-## Demo checklist
+## Demo Test Script
 
-Before calling the project finished, run through the deployed Vercel and Render
-demo with two accounts:
+Use these exact checks before presenting the project.
 
-- Register with email/password, sign out, sign back in, and confirm the user
-  menu shows the right traveller.
-- Sign in with Google and confirm the app returns to TripWeaver with the account
-  loaded instead of showing an account-service error.
-- Create two different accounts and confirm each account sees only its own
-  conversations and plan folders.
-- Create a chat, rename it, pin and unpin it, move it into a plan folder, move
-  it back to All chats, then delete it.
-- Ask a budget question such as "I want to travel to Singapore for one week;
-  how much money do I need?" and confirm TripWeaver asks one guided question at
-  a time before producing the estimate.
-- Ask a normal place question such as "Tell me about Singapore Zoo" and confirm
-  no unrelated answer choices appear under the normal response.
-- Test one future flight search, hotel search, itinerary request, weather
-  request, currency conversion, and place search.
-- Switch SOL/LUNA, resize to mobile width, and confirm history and tools open as
-  sheets while the chat remains usable.
+### 1. Health
 
-## Production boundaries
+- Open https://tripweaver-backend-9fz2.onrender.com/health.
+- Confirm backend status is `ok`.
+- Confirm all MCP/tool groups are available.
+- Confirm `account_storage.status` is `available` after the latest backend deploy.
 
-- LangGraph memory and rate limiting are in process. Account history uses
-  SQLite for local/dev and can use Supabase/Postgres through `DATABASE_URL`.
-  Use managed Postgres plus Redis-backed rate limits before horizontal scaling.
-- `TRIPWEAVER_TOOL_MODE=local` is intended for the bootcamp/demo backend. The
-  full production topology should keep provider clients behind isolated MCP
-  services unless there is an explicit deployment reason to collapse them.
-- `book_hotel` and `book_flight` return explicit simulated confirmations.
-- Open-Meteo forecasts are limited to the provider's 16-day horizon.
-- The itinerary planner accepts trips up to 21 days and uses only supplied,
-  provider-backed activities as named recommendations.
-- Frankfurter publishes a finite reference-currency set; unsupported currencies
-  return a controlled error.
-- Dependency ranges are not a deployment lock file. Produce and maintain exact
-  deployment locks before a production release.
+### 2. Email/password auth
 
-See [SYSTEM.md](./SYSTEM.md) for the request lifecycle, trust boundaries,
-failure behavior, and extension points.
+- Create a new account.
+- Log out.
+- Log back in.
+- Confirm the user menu shows the correct traveller.
+
+### 3. Google auth
+
+- Click Continue with Google.
+- Choose a Google account.
+- Confirm TripWeaver returns to the app signed in.
+- If it returns to the modal with an error, check Render `SUPABASE_URL`, Render `SUPABASE_PUBLISHABLE_KEY`, Supabase Google provider settings, and Supabase redirect URLs.
+
+### 4. Account isolation
+
+- Create account A and add a chat and plan folder.
+- Sign out.
+- Create account B.
+- Confirm account B cannot see account A's chats or folders.
+
+### 5. Sidebar and plans
+
+- Create a chat.
+- Rename it.
+- Pin and unpin it.
+- Create a plan folder.
+- Add the chat to that plan.
+- Move it back to All chats.
+- Delete it.
+
+### 6. Guided planning questions
+
+Prompt:
+
+```text
+I'm thinking to travel in Singapore for one week. I don't know how much money I need.
+```
+
+Expected behavior:
+
+- TripWeaver asks one guided question at a time.
+- Answer choices progress step by step.
+- It should not show unrelated choices under a normal answer.
+- After enough answers, it produces a budget estimate.
+
+### 7. Normal place question
+
+Prompt:
+
+```text
+Tell me about Singapore Zoo.
+```
+
+Expected behavior:
+
+- Normal answer only.
+- No random food/beach/adventure/shopping quick replies.
+
+### 8. Live tool prompts
+
+```text
+Search flights from CMB to DXB on 2026-08-01 returning 2026-08-07.
+```
+
+```text
+Find hotels in Paris for 2 adults from 2026-09-10 to 2026-09-14.
+```
+
+```text
+Plan a 3 day itinerary for Tokyo with food, culture, and sightseeing.
+```
+
+```text
+What is the weather in Tokyo next week?
+```
+
+```text
+Convert 500 USD to EUR.
+```
+
+```text
+Find budget friendly places to visit in Dubai for shopping.
+```
+
+### 9. Responsive UI
+
+- Test desktop width.
+- Test mobile width.
+- Switch between SOL and LUNA.
+- Confirm the active theme state is visible.
+- Confirm chat, history, plans, and status panels remain usable.
+
+## Production Boundaries
+
+This is a strong demo and portfolio architecture, but these items remain before a commercial launch:
+
+- Replace Render Free with paid always-on infrastructure or a VM/container platform with uptime guarantees.
+- Move LangGraph memory and rate limiting to shared durable stores.
+- Add CI gates for all backend/frontend checks.
+- Add structured logs, metrics, traces, and alerting.
+- Add backup and restore procedures for account/history data.
+- Add real domain and HTTPS-first production configuration.
+- Keep booking simulated unless real payment, supplier, cancellation, and compliance workflows are intentionally built.
+
+## Documentation
+
+- [SYSTEM.md](./SYSTEM.md): implemented architecture, lifecycle, trust boundaries, and limitations.
+- [SECURITY.md](./SECURITY.md): threat model and deployment checklist.
+- [MCP_SETUP.md](./MCP_SETUP.md): provider contracts and MCP service setup.
+- [BOOTCAMP_DEPLOYMENT.md](./BOOTCAMP_DEPLOYMENT.md): Vercel + Render + Supabase free demo deployment.
+- [DEPLOYMENT.md](./DEPLOYMENT.md): single-VM production deployment.
+- [frontend/README.md](./frontend/README.md): frontend implementation notes.
