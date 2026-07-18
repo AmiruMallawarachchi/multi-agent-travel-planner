@@ -47,7 +47,7 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> str:
 
 # ---------------------------------------------------------------------------
 # Rate limiting - in-memory sliding window. Good enough for a single-instance
-# deployment (Railway free/hobby tier is one instance); swap the dict below
+# deployment (the Render demo runs one backend instance); swap the dict below
 # for Redis if you scale horizontally.
 # ---------------------------------------------------------------------------
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))

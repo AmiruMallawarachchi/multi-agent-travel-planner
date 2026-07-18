@@ -292,7 +292,7 @@ deployment.
 ## Adding another MCP service
 
 1. Create a sibling directory with a provider client, `server.py`, tests,
-   `.env.example`, `Dockerfile`, and `railway.json`.
+   `.env.example`, and `Dockerfile`, then register it in `render.yaml`.
 2. Validate and normalize all provider data at the service boundary.
 3. Return `{"ok": false, "error": ...}` for expected failures and redact
    credentials from errors and logs.
