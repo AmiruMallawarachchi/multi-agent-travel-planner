@@ -43,6 +43,7 @@ class UserResponse(BaseModel):
     email: str
     name: str
     created_at: str
+    avatar_url: str | None = None
 
 
 class AuthResponse(BaseModel):

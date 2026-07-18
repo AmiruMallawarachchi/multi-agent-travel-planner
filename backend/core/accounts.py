@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 from fastapi import Header, HTTPException, status
 
@@ -52,13 +53,15 @@ class AccountUser:
     email: str
     name: str
     created_at: str
+    avatar_url: str | None = None
 
-    def public(self) -> dict[str, str]:
+    def public(self) -> dict[str, str | None]:
         return {
             "id": self.id,
             "email": self.email,
             "name": self.name,
             "created_at": self.created_at,
+            "avatar_url": self.avatar_url,
         }
 
 
@@ -134,7 +137,8 @@ def _ensure_schema(connection: _Connection) -> None:
             email TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            avatar_url TEXT
         )
         """,
         """
@@ -179,7 +183,19 @@ def _ensure_schema(connection: _Connection) -> None:
     )
     for statement in statements:
         connection.execute(statement)
+    _ensure_user_avatar_column(connection)
     connection.commit()
+
+
+def _ensure_user_avatar_column(connection: _Connection) -> None:
+    if _uses_postgres():
+        connection.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT")
+        return
+
+    columns = connection.execute("PRAGMA table_info(users)").fetchall()
+    column_names = {row["name"] for row in columns}
+    if "avatar_url" not in column_names:
+        connection.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT")
 
 
 def _normalize_email(email: str) -> str:
@@ -195,6 +211,16 @@ def _normalize_name(name: str | None, email: str) -> str:
         value = email.split("@", 1)[0]
     if len(value) > 80:
         raise AccountError("Name must be 80 characters or fewer")
+    return value
+
+
+def _normalize_avatar_url(avatar_url: str | None) -> str | None:
+    value = (avatar_url or "").strip()
+    if not value or len(value) > 2048:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc:
+        return None
     return value
 
 
@@ -238,12 +264,20 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _row_value(row: sqlite3.Row | dict[str, Any], key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def _row_to_user(row: sqlite3.Row | dict[str, Any]) -> AccountUser:
     return AccountUser(
         id=row["id"],
         email=row["email"],
         name=row["name"],
         created_at=row["created_at"],
+        avatar_url=_row_value(row, "avatar_url"),
     )
 
 
@@ -301,6 +335,7 @@ def register_user(email: str, password: str, name: str | None = None) -> tuple[s
             email=normalized_email,
             name=normalized_name,
             created_at=now,
+            avatar_url=None,
         )
         return token, user
 
@@ -323,6 +358,7 @@ def authenticate_external_user(
     subject: str,
     email: str,
     name: str | None = None,
+    avatar_url: str | None = None,
 ) -> tuple[str, AccountUser]:
     normalized_provider = provider.strip().lower()
     normalized_subject = subject.strip()
@@ -333,6 +369,7 @@ def authenticate_external_user(
 
     normalized_email = _normalize_email(email)
     normalized_name = _normalize_name(name, normalized_email)
+    normalized_avatar_url = _normalize_avatar_url(avatar_url)
     now = _utc_now().isoformat()
 
     with _connect() as connection:
@@ -357,11 +394,18 @@ def authenticate_external_user(
                 connection.execute(
                     _sql(
                         """
-                        INSERT INTO users (id, email, name, password_hash, created_at)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO users (id, email, name, password_hash, created_at, avatar_url)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         """
                     ),
-                    (user_id, normalized_email, normalized_name, "external_only", now),
+                    (
+                        user_id,
+                        normalized_email,
+                        normalized_name,
+                        "external_only",
+                        now,
+                        normalized_avatar_url,
+                    ),
                 )
                 row = connection.execute(
                     _sql("SELECT * FROM users WHERE id = ?"), (user_id,)
@@ -377,6 +421,19 @@ def authenticate_external_user(
                 (normalized_provider, normalized_subject, row["id"], now),
             )
 
+        connection.execute(
+            _sql(
+                """
+                UPDATE users
+                SET name = ?, avatar_url = COALESCE(?, avatar_url)
+                WHERE id = ?
+                """
+            ),
+            (normalized_name, normalized_avatar_url, row["id"]),
+        )
+        row = connection.execute(
+            _sql("SELECT * FROM users WHERE id = ?"), (row["id"],)
+        ).fetchone()
         token = _create_session(connection, row["id"])
         connection.commit()
         return token, _row_to_user(row)

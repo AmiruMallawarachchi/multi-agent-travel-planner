@@ -122,4 +122,5 @@ export interface AccountUser {
   email: string
   name: string
   created_at: string
+  avatar_url?: string | null
 }

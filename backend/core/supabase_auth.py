@@ -20,6 +20,7 @@ class ExternalIdentity:
     subject: str
     email: str
     name: str | None
+    avatar_url: str | None
 
 
 async def verify_supabase_google_token(
@@ -80,9 +81,11 @@ async def verify_supabase_google_token(
 
     user_metadata = payload.get("user_metadata") or {}
     name = user_metadata.get("full_name") or user_metadata.get("name")
+    avatar_url = user_metadata.get("avatar_url") or user_metadata.get("picture")
     return ExternalIdentity(
         provider="google",
         subject=subject,
         email=email,
         name=str(name).strip() if name else None,
+        avatar_url=str(avatar_url).strip() if avatar_url else None,
     )

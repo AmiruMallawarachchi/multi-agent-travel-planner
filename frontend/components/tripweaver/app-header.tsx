@@ -144,9 +144,20 @@ export function AppHeader({
               aria-label="User menu"
             >
               <Avatar size="sm">
-                <AvatarFallback className="glass-control text-accent-foreground">
-                  {initials(account)}
-                </AvatarFallback>
+                {account?.avatar_url ? (
+                  // Google profile images need a plain img so they render reliably in tests and browsers.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={account.avatar_url}
+                    alt={`${account.name} profile photo`}
+                    referrerPolicy="no-referrer"
+                    className="size-full rounded-full object-cover"
+                  />
+                ) : (
+                  <AvatarFallback className="glass-control text-accent-foreground">
+                    {initials(account)}
+                  </AvatarFallback>
+                )}
               </Avatar>
               <span className="hidden xl:inline">{account ? account.name : "User"}</span>
             </Button>

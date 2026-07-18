@@ -71,6 +71,7 @@ def test_google_login_links_verified_email_to_existing_account(monkeypatch, tmp_
             subject="google-user-123",
             email="traveller@example.com",
             name="Google Traveller",
+            avatar_url="https://lh3.googleusercontent.com/traveller.jpg",
         )
 
     monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
@@ -82,6 +83,9 @@ def test_google_login_links_verified_email_to_existing_account(monkeypatch, tmp_
 
     assert response.status_code == 200
     assert response.json()["user"]["id"] == registered["user"]["id"]
+    assert response.json()["user"]["avatar_url"] == (
+        "https://lh3.googleusercontent.com/traveller.jpg"
+    )
     google_token = response.json()["token"]
     assert client.get(
         "/conversations", headers={"Authorization": f"Bearer {google_token}"}
@@ -97,6 +101,7 @@ def test_google_login_reuses_identity_without_creating_duplicate_user(monkeypatc
             subject="google-user-456",
             email="new@example.com",
             name="New Traveller",
+            avatar_url="https://lh3.googleusercontent.com/new.jpg",
         )
 
     monkeypatch.setattr(routes, "verify_supabase_google_token", verified_identity)
@@ -113,6 +118,7 @@ def test_google_login_reuses_identity_without_creating_duplicate_user(monkeypatc
 
     assert first["user"]["id"] == second["user"]["id"]
     assert second["user"]["name"] == "New Traveller"
+    assert second["user"]["avatar_url"] == "https://lh3.googleusercontent.com/new.jpg"
 
 
 def test_conversations_are_private_to_the_authenticated_user(monkeypatch, tmp_path):

@@ -352,6 +352,7 @@ describe("TripWeaverApp", () => {
             email: "maya@example.com",
             name: "Maya",
             created_at: "2026-07-14T10:00:00+00:00",
+            avatar_url: "https://lh3.googleusercontent.com/maya.jpg",
           })
         }
         if (url.includes("/api/conversations")) {
@@ -401,6 +402,7 @@ describe("TripWeaverApp", () => {
     renderApp()
 
     expect(await screen.findByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
+    expect(screen.getAllByAltText("Maya profile photo")).toHaveLength(2)
     expect(screen.getByRole("button", { name: /^Cloud Tokyo,/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Japan plans, 0 chats" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
