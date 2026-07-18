@@ -23,6 +23,50 @@ def test_registry_contains_every_tripweaver_mcp_service():
     assert set(mcp_client._breakers) == EXPECTED_SERVERS
 
 
+def test_resolve_mcp_url_prefers_explicit_url(monkeypatch):
+    monkeypatch.setenv("TEST_MCP_URL", "https://explicit.example/mcp")
+    monkeypatch.setenv("TEST_MCP_HOST", "ignored.example")
+
+    assert (
+        mcp_client._resolve_mcp_url(
+            "TEST_MCP_URL", "TEST_MCP_HOST", "http://localhost:9999/mcp"
+        )
+        == "https://explicit.example/mcp"
+    )
+
+
+def test_resolve_mcp_url_supports_render_hostname(monkeypatch):
+    monkeypatch.delenv("TEST_MCP_URL", raising=False)
+    monkeypatch.setenv("TEST_MCP_HOST", "tripweaver-weather-mcp.onrender.com")
+
+    assert (
+        mcp_client._resolve_mcp_url(
+            "TEST_MCP_URL", "TEST_MCP_HOST", "http://localhost:9999/mcp"
+        )
+        == "https://tripweaver-weather-mcp.onrender.com/mcp"
+    )
+
+
+def test_runtime_info_proves_remote_mcp_transport(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "mcp")
+
+    assert mcp_client.tool_runtime_info() == {
+        "mode": "mcp",
+        "transport": "streamable_http",
+        "configured_servers": 6,
+    }
+
+
+def test_runtime_info_reports_in_process_fallback(monkeypatch):
+    monkeypatch.setattr(mcp_client, "TOOL_MODE", "local")
+
+    assert mcp_client.tool_runtime_info() == {
+        "mode": "local",
+        "transport": "in_process",
+        "configured_servers": 6,
+    }
+
+
 @pytest.mark.asyncio
 async def test_tools_are_connection_backed_and_scoped_to_one_server(monkeypatch):
     monkeypatch.setattr(mcp_client, "TOOL_MODE", "mcp")
