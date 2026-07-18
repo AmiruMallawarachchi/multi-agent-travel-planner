@@ -209,12 +209,13 @@ DATABASE_URL=postgresql://...
 TRIPWEAVER_API_KEYS=one-long-random-secret
 ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
 TRIPWEAVER_TOOL_MODE=mcp
-HOTEL_MCP_HOST=tripweaver-hotel-mcp.onrender.com
-FLIGHT_MCP_HOST=tripweaver-flight-mcp.onrender.com
+MCP_HEALTH_TIMEOUT_SECONDS=70
+HOTEL_MCP_HOST=tripweaver-hotel-search-mcp.onrender.com
+FLIGHT_MCP_HOST=tripweaver-flight-search-mcp.onrender.com
 ITINERARY_MCP_HOST=tripweaver-itinerary-mcp.onrender.com
 WEATHER_MCP_HOST=tripweaver-weather-mcp.onrender.com
 CURRENCY_MCP_HOST=tripweaver-currency-mcp.onrender.com
-LOCATION_MCP_HOST=tripweaver-location-mcp.onrender.com
+LOCATION_MCP_HOST=tripweaver-place-search-mcp.onrender.com
 SUPABASE_URL=https://zkxzsnudgzsdqlvvinbi.supabase.co
 SUPABASE_PUBLISHABLE_KEY=...
 ROUTER_MODEL=gpt-4o-mini
@@ -227,6 +228,8 @@ MAX_MESSAGE_LENGTH=2000
 Render injects the six `*_MCP_HOST` values from the corresponding services in
 `render.yaml`; they are listed here to make the runtime contract explicit.
 `SERPAPI_API_KEY` belongs only to the hotel, flight, and location MCP services.
+The 70-second explicit readiness window accommodates Render Free cold starts;
+the cheap `/health/live` endpoint remains the deployment liveness check.
 
 ### Vercel frontend
 

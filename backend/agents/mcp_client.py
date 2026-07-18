@@ -36,17 +36,22 @@ ServerStatus = Literal["available", "unavailable"]
 
 
 def _resolve_mcp_url(url_env: str, host_env: str, default: str) -> str:
-    """Resolve an explicit MCP URL or a Render-generated public hostname."""
+    """Resolve a Render service hostname or an explicit MCP URL.
+
+    Blueprint-generated hostnames are authoritative when present. This keeps a
+    stale manually configured URL (for example, an old localhost value) from
+    overriding Render's current service-to-service wiring after a migration.
+    """
+    host = os.getenv(host_env, "").strip().rstrip("/")
+    if host:
+        base_url = host if "://" in host else f"https://{host}"
+        return f"{base_url}/mcp"
+
     explicit_url = os.getenv(url_env, "").strip()
     if explicit_url:
         return explicit_url
 
-    host = os.getenv(host_env, "").strip().rstrip("/")
-    if not host:
-        return default
-
-    base_url = host if "://" in host else f"https://{host}"
-    return f"{base_url}/mcp"
+    return default
 
 
 HOTEL_MCP_URL = _resolve_mcp_url(
@@ -76,7 +81,26 @@ MCP_SERVER_URLS: dict[ServerName, str] = {
     "currency-mcp": CURRENCY_MCP_URL,
     "location-mcp": LOCATION_MCP_URL,
 }
-HEALTH_TIMEOUT = httpx.Timeout(connect=1.0, read=2.0, write=1.0, pool=1.0)
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    """Read a positive float without making a bad deployment value fatal."""
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+MCP_HEALTH_TIMEOUT_SECONDS = _positive_float_env(
+    "MCP_HEALTH_TIMEOUT_SECONDS", 2.0
+)
+HEALTH_TIMEOUT = httpx.Timeout(
+    connect=min(MCP_HEALTH_TIMEOUT_SECONDS, 5.0),
+    read=MCP_HEALTH_TIMEOUT_SECONDS,
+    write=5.0,
+    pool=5.0,
+)
 logger = logging.getLogger("tripweaver.mcp")
 TOOL_MODE = os.getenv("TRIPWEAVER_TOOL_MODE", "mcp").strip().lower()
 

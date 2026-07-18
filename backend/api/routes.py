@@ -134,6 +134,7 @@ async def oauth_login(
             identity.subject,
             identity.email,
             identity.name,
+            identity.avatar_url,
         )
     except ExternalAuthError as exc:
         raise HTTPException(exc.status_code, str(exc)) from exc
