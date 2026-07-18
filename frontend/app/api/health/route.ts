@@ -21,25 +21,33 @@ function normalizeMcpServers(value: unknown) {
 }
 
 export async function GET() {
-  try {
-    const response = await fetch(`${BACKEND_URL}/health`, {
+  const [readinessResult, livenessResult] = await Promise.allSettled([
+    fetch(`${BACKEND_URL}/health`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5_000),
-    })
-    const payload = response.ok ? ((await response.json()) as { mcp_servers?: unknown }) : {}
+    }),
+    fetch(`${BACKEND_URL}/health/live`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    }),
+  ])
 
-    return Response.json({
-      online: true,
-      backend: response.ok ? "online" : "offline",
-      service: "tripweaver-frontend",
-      mcp_servers: normalizeMcpServers(payload.mcp_servers),
-    })
-  } catch {
-    return Response.json({
-      online: true,
-      backend: "offline",
-      service: "tripweaver-frontend",
-      mcp_servers: {},
-    })
+  const readiness = readinessResult.status === "fulfilled" ? readinessResult.value : null
+  const liveness = livenessResult.status === "fulfilled" ? livenessResult.value : null
+  let payload: { mcp_servers?: unknown } = {}
+
+  if (readiness?.ok) {
+    try {
+      payload = (await readiness.json()) as { mcp_servers?: unknown }
+    } catch {
+      payload = {}
+    }
   }
+
+  return Response.json({
+    online: true,
+    backend: readiness?.ok || liveness?.ok ? "online" : "offline",
+    service: "tripweaver-frontend",
+    mcp_servers: normalizeMcpServers(payload.mcp_servers),
+  })
 }

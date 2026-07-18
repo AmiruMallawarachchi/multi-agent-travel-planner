@@ -23,6 +23,19 @@ def test_registry_contains_every_tripweaver_mcp_service():
     assert set(mcp_client._breakers) == EXPECTED_SERVERS
 
 
+def test_positive_float_env_accepts_valid_timeout(monkeypatch):
+    monkeypatch.setenv("TEST_TIMEOUT", "70")
+
+    assert mcp_client._positive_float_env("TEST_TIMEOUT", 2.0) == 70.0
+
+
+@pytest.mark.parametrize("value", ["invalid", "0", "-1"])
+def test_positive_float_env_falls_back_for_invalid_timeout(monkeypatch, value):
+    monkeypatch.setenv("TEST_TIMEOUT", value)
+
+    assert mcp_client._positive_float_env("TEST_TIMEOUT", 2.0) == 2.0
+
+
 def test_resolve_mcp_url_uses_explicit_url_without_render_hostname(monkeypatch):
     monkeypatch.setenv("TEST_MCP_URL", "https://explicit.example/mcp")
     monkeypatch.delenv("TEST_MCP_HOST", raising=False)

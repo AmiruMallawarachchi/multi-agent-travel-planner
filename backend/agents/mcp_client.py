@@ -81,7 +81,26 @@ MCP_SERVER_URLS: dict[ServerName, str] = {
     "currency-mcp": CURRENCY_MCP_URL,
     "location-mcp": LOCATION_MCP_URL,
 }
-HEALTH_TIMEOUT = httpx.Timeout(connect=1.0, read=2.0, write=1.0, pool=1.0)
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    """Read a positive float without making a bad deployment value fatal."""
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+MCP_HEALTH_TIMEOUT_SECONDS = _positive_float_env(
+    "MCP_HEALTH_TIMEOUT_SECONDS", 2.0
+)
+HEALTH_TIMEOUT = httpx.Timeout(
+    connect=min(MCP_HEALTH_TIMEOUT_SECONDS, 5.0),
+    read=MCP_HEALTH_TIMEOUT_SECONDS,
+    write=5.0,
+    pool=5.0,
+)
 logger = logging.getLogger("tripweaver.mcp")
 TOOL_MODE = os.getenv("TRIPWEAVER_TOOL_MODE", "mcp").strip().lower()
 
