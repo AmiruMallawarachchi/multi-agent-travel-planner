@@ -1,5 +1,10 @@
 # TripWeaver
 
+[![CI](https://github.com/AmiruMallawarachchi/multi-agent-travel-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/AmiruMallawarachchi/multi-agent-travel-planner/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/demo-live-0f766e)](https://multi-agent-travel-planner-jet.vercel.app/)
+[![MCP runtime](https://img.shields.io/badge/MCP-6_services-2563eb)](https://tripweaver-backend-9fz2.onrender.com/health)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4b5563)](./LICENSE)
+
 TripWeaver is a production-shaped, MCP-based multi-agent travel planner. It combines a polished responsive Next.js interface with a FastAPI + LangGraph backend that routes each travel request to a specialist agent with only the tools it is allowed to use.
 
 The system supports account-scoped chat history, plan folders, live tool status, structured travel results, guided planning questions, and provider-backed travel research through isolated MCP/tool adapters.
@@ -10,12 +15,27 @@ The system supports account-scoped chat history, plan folders, live tool status,
 | --- | --- |
 | Frontend | https://multi-agent-travel-planner-jet.vercel.app/ |
 | Backend | https://tripweaver-backend-9fz2.onrender.com |
+| Backend liveness | https://tripweaver-backend-9fz2.onrender.com/health/live |
 | Backend health | https://tripweaver-backend-9fz2.onrender.com/health |
 | Frontend health proxy | https://multi-agent-travel-planner-jet.vercel.app/api/health |
 | Supabase project | https://zkxzsnudgzsdqlvvinbi.supabase.co |
 | Repository | https://github.com/AmiruMallawarachchi/multi-agent-travel-planner |
 
-Demo note: Render Free can sleep after inactivity. If the first request is slow or auth briefly appears unavailable, open the backend health URL once and retry after the service wakes.
+Demo note: Render Free can sleep after inactivity. If the first request is slow or auth briefly appears unavailable, open the backend health URL once and retry after the service wakes. Render uses the lightweight `/health/live` endpoint for liveness; `/health` intentionally performs the slower MCP and account-storage readiness checks.
+
+## Release Evidence
+
+Final manual acceptance was completed on **July 18, 2026**. These results are a dated release record, not an uptime guarantee for free-tier services.
+
+| Check | Verified result |
+| --- | --- |
+| Responsive Vercel frontend | Passed on desktop and mobile layouts |
+| Render backend and account storage | `status=ok`, Postgres `available` |
+| Deployed tool runtime | MCP over streamable HTTP, 6 services configured |
+| MCP readiness | Flight, hotel, itinerary, weather, currency, and location available |
+| Authentication | Registration, email login, Google login, logout passed |
+| Account isolation | Separate users received separate history and plan folders |
+| Live travel workflows | Flight, hotel, itinerary, weather, currency, and place searches passed |
 
 ## What Makes It Strong
 
@@ -31,70 +51,46 @@ Demo note: Render Free can sleep after inactivity. If the first request is slow 
 ## Architecture At A Glance
 
 ```mermaid
-flowchart LR
-    User[Traveller] --> Browser[Browser]
-    Browser --> Vercel[Next.js frontend on Vercel]
-    Vercel -->|server-side proxy with BACKEND_API_KEY| Render[FastAPI backend on Render]
-    Render --> Router[LangGraph intent router]
-    Render --> AccountStore[(Supabase Postgres)]
-
-    Router --> General[General travel agent]
-    Router --> Flight[Flight agent]
-    Router --> Hotel[Hotel agent]
-    Router --> Itinerary[Itinerary agent]
-    Router --> Weather[Weather agent]
-    Router --> Currency[Currency agent]
-    Router --> Location[Location agent]
-
-    Flight --> FlightTools[Flight MCP]
-    Hotel --> HotelTools[Hotel MCP]
-    Itinerary --> ItineraryTools[Itinerary MCP]
-    Weather --> WeatherTools[Weather MCP]
-    Currency --> CurrencyTools[Currency MCP]
-    Location --> LocationTools[Location MCP]
-
-    FlightTools --> SerpApi[SerpApi Google Flights]
-    HotelTools --> SerpApiHotels[SerpApi Google Hotels]
-    LocationTools --> SerpApiMaps[SerpApi Google Maps]
-    LocationTools --> OpenMeteoGeo[Open-Meteo Geocoding]
-    WeatherTools --> OpenMeteoForecast[Open-Meteo Forecast]
-    CurrencyTools --> Frankfurter[Frankfurter Rates]
+graph LR
+    A["Traveller"] --> B["Next.js frontend"]
+    B --> C["FastAPI backend"]
+    C --> D["LangGraph router"]
+    C --> E["Supabase Postgres"]
+    D --> F["General agent"]
+    D --> G["Flight agent"]
+    D --> H["Hotel agent"]
+    D --> I["Itinerary agent"]
+    D --> J["Weather agent"]
+    D --> K["Currency agent"]
+    D --> L["Location agent"]
+    G --> M["Flight MCP"]
+    H --> N["Hotel MCP"]
+    I --> O["Itinerary MCP"]
+    J --> P["Weather MCP"]
+    K --> Q["Currency MCP"]
+    L --> R["Location MCP"]
+    M --> S["SerpApi Flights"]
+    N --> T["SerpApi Hotels"]
+    P --> U["Open-Meteo"]
+    Q --> V["Frankfurter"]
+    R --> W["SerpApi Maps and Open-Meteo"]
 ```
 
 ## Production Topology
 
 ```mermaid
-flowchart TB
-    subgraph Public
-        Browser[Browser]
-        Frontend[Vercel Next.js]
-    end
-
-    subgraph PrivateServerSide
-        Backend[Render FastAPI + LangGraph]
-        Sessions[HTTP-only account sessions]
-        Database[(Supabase Postgres)]
-    end
-
-    subgraph ToolBoundary
-        FlightMCP[Flight MCP]
-        HotelMCP[Hotel MCP]
-        ItineraryMCP[Itinerary MCP]
-        WeatherMCP[Weather MCP]
-        CurrencyMCP[Currency MCP]
-        LocationMCP[Location MCP]
-    end
-
-    Browser --> Frontend
-    Frontend -->|/api/chat, /api/auth, /api/plans| Backend
-    Backend --> Sessions
-    Backend --> Database
-    Backend --> FlightMCP
-    Backend --> HotelMCP
-    Backend --> ItineraryMCP
-    Backend --> WeatherMCP
-    Backend --> CurrencyMCP
-    Backend --> LocationMCP
+graph TB
+    A["Public browser"] --> B["Vercel Next.js frontend"]
+    B --> C["Server-side API proxy"]
+    C --> D["Render FastAPI and LangGraph"]
+    D --> E["HTTP-only account sessions"]
+    D --> F["Supabase Postgres"]
+    D --> G["Flight MCP service"]
+    D --> H["Hotel MCP service"]
+    D --> I["Itinerary MCP service"]
+    D --> J["Weather MCP service"]
+    D --> K["Currency MCP service"]
+    D --> L["Location MCP service"]
 ```
 
 The Render Blueprint deploys every MCP capability as an independent web service.
@@ -252,7 +248,7 @@ Important:
 - Do not include square brackets around the password. Use `password`, not `[password]`.
 - If the database URL or password was ever pasted into chat, rotate the Supabase database password and update Render.
 
-## Current Auth Issue Checklist
+## Account Troubleshooting
 
 If the UI says the account service is temporarily unavailable while `/health` is green, the backend is alive but account persistence is failing.
 
@@ -269,7 +265,7 @@ Check these first:
 9. Supabase project is not paused.
 10. Supabase connection string uses the Transaction Pooler or Session Pooler string recommended by the dashboard.
 
-Expected backend health after this branch is deployed:
+Expected production backend health:
 
 ```json
 {
