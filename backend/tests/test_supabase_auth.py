@@ -26,7 +26,10 @@ async def test_verifies_google_identity_without_exposing_token(monkeypatch):
                 "email": "maya@example.com",
                 "email_confirmed_at": "2026-07-17T10:00:00Z",
                 "app_metadata": {"provider": "google", "providers": ["google"]},
-                "user_metadata": {"full_name": "Maya Chen"},
+                "user_metadata": {
+                    "full_name": "Maya Chen",
+                    "avatar_url": "https://lh3.googleusercontent.com/avatar.jpg",
+                },
             },
         )
 
@@ -39,6 +42,7 @@ async def test_verifies_google_identity_without_exposing_token(monkeypatch):
     assert identity.subject == "subject-1"
     assert identity.email == "maya@example.com"
     assert identity.name == "Maya Chen"
+    assert identity.avatar_url == "https://lh3.googleusercontent.com/avatar.jpg"
 
 
 @pytest.mark.asyncio

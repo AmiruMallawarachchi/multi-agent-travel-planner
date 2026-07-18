@@ -852,6 +852,7 @@ export function TripWeaverApp() {
             </div>
           ) : null}
           <ChatWorkspace
+            account={account}
             attachments={attachments}
             conversation={activeConversation}
             input={input}

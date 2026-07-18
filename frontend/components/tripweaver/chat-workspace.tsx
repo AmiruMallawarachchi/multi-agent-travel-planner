@@ -14,7 +14,6 @@ import {
   Share2,
   Sparkles,
   Square,
-  UserRound,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -31,6 +30,7 @@ import {
   itineraryDestination,
 } from "@/components/tripweaver/structured-results"
 import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,7 @@ import {
 } from "@/features/tripweaver/conversations"
 import type {
   Attachment,
+  AccountUser,
   ChatMessage,
   Conversation,
   RuntimeState,
@@ -69,6 +70,7 @@ interface ChatWorkspaceProps {
   isStreaming: boolean
   runtime: RuntimeState
   showToolActivity: boolean
+  account: AccountUser | null
   onAttachments: (files: FileList | null) => void
   onInputChange: (input: string) => void
   onQuickReply: (messageId: string, value: string) => void
@@ -121,15 +123,56 @@ function looksLikeItinerary(content: string) {
   return /\bday\s+\d+\b/i.test(content) || /\bdaily itinerary\b/i.test(content)
 }
 
+function userInitials(account: AccountUser | null) {
+  if (!account) return "U"
+  return (
+    account.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") ||
+    account.email[0]?.toUpperCase() ||
+    "U"
+  )
+}
+
+function UserMessageAvatar({ account }: { account: AccountUser | null }) {
+  return (
+    <Avatar
+      size="default"
+      className="glass-control mt-0.5 size-8 border border-border/70 bg-background/40"
+      aria-hidden="true"
+    >
+      {account?.avatar_url ? (
+        // Google profile images need a plain img so they render reliably in tests and browsers.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={account.avatar_url}
+          alt={`${account.name} profile photo`}
+          referrerPolicy="no-referrer"
+          className="size-full rounded-full object-cover"
+        />
+      ) : (
+        <AvatarFallback className="bg-transparent text-xs font-semibold text-accent-foreground">
+          {userInitials(account)}
+        </AvatarFallback>
+      )}
+    </Avatar>
+  )
+}
+
 function MessageBubble({
   message,
   showToolActivity,
+  account,
   onOpenItinerary,
   onQuickReply,
   quickRepliesDisabled,
 }: {
   message: ChatMessage
   showToolActivity: boolean
+  account: AccountUser | null
   onOpenItinerary: (message: ChatMessage, result?: StructuredResult) => void
   onQuickReply: (messageId: string, value: string) => void
   quickRepliesDisabled: boolean
@@ -149,12 +192,7 @@ function MessageBubble({
   return (
     <article className={cn("flex items-start gap-2.5", isUser && "flex-row-reverse")}>
       {isUser ? (
-        <div
-          className="glass-control mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
-          aria-hidden="true"
-        >
-          <UserRound className="size-3.5" />
-        </div>
+        <UserMessageAvatar account={account} />
       ) : (
         <TripWeaverMascot
           mood={mascotMoodForMessage(message)}
@@ -335,6 +373,7 @@ function ConversationExport({ conversation }: { conversation: Conversation }) {
 
 export function ChatWorkspace({
   attachments,
+  account,
   conversation,
   input,
   isListening,
@@ -396,6 +435,7 @@ export function ChatWorkspace({
           {conversation.messages.map((message) => (
             <MessageBubble
               key={message.id}
+              account={account}
               message={message}
               showToolActivity={showToolActivity}
               onOpenItinerary={(selectedMessage, result) =>
