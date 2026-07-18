@@ -78,6 +78,7 @@ class TestApiSecurity:
                 "currency-mcp": "available",
                 "location-mcp": "unavailable",
             },
+            "account_storage": {"backend": "sqlite", "status": "available"},
         }
 
     def test_session_requires_api_key_when_configured(self, monkeypatch):

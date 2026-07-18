@@ -11,6 +11,7 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     service: str
     mcp_servers: dict[str, Literal["available", "unavailable"]]
+    account_storage: dict[str, str] | None = None
 
 
 class SessionResponse(BaseModel):

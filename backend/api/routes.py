@@ -43,6 +43,7 @@ from core.security import (
 from core.accounts import (
     AccountError,
     AccountUser,
+    account_storage_status,
     authenticate_user,
     authenticate_external_user,
     clear_user_conversations,
@@ -68,6 +69,7 @@ async def health() -> HealthResponse:
         status="ok",
         service="tripweaver-backend",
         mcp_servers=await get_server_statuses(),
+        account_storage=account_storage_status(),
     )
 
 
