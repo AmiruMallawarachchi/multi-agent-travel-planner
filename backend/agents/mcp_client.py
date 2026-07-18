@@ -36,17 +36,22 @@ ServerStatus = Literal["available", "unavailable"]
 
 
 def _resolve_mcp_url(url_env: str, host_env: str, default: str) -> str:
-    """Resolve an explicit MCP URL or a Render-generated public hostname."""
+    """Resolve a Render service hostname or an explicit MCP URL.
+
+    Blueprint-generated hostnames are authoritative when present. This keeps a
+    stale manually configured URL (for example, an old localhost value) from
+    overriding Render's current service-to-service wiring after a migration.
+    """
+    host = os.getenv(host_env, "").strip().rstrip("/")
+    if host:
+        base_url = host if "://" in host else f"https://{host}"
+        return f"{base_url}/mcp"
+
     explicit_url = os.getenv(url_env, "").strip()
     if explicit_url:
         return explicit_url
 
-    host = os.getenv(host_env, "").strip().rstrip("/")
-    if not host:
-        return default
-
-    base_url = host if "://" in host else f"https://{host}"
-    return f"{base_url}/mcp"
+    return default
 
 
 HOTEL_MCP_URL = _resolve_mcp_url(

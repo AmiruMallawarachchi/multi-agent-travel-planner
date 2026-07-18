@@ -23,15 +23,27 @@ def test_registry_contains_every_tripweaver_mcp_service():
     assert set(mcp_client._breakers) == EXPECTED_SERVERS
 
 
-def test_resolve_mcp_url_prefers_explicit_url(monkeypatch):
+def test_resolve_mcp_url_uses_explicit_url_without_render_hostname(monkeypatch):
     monkeypatch.setenv("TEST_MCP_URL", "https://explicit.example/mcp")
-    monkeypatch.setenv("TEST_MCP_HOST", "ignored.example")
+    monkeypatch.delenv("TEST_MCP_HOST", raising=False)
 
     assert (
         mcp_client._resolve_mcp_url(
             "TEST_MCP_URL", "TEST_MCP_HOST", "http://localhost:9999/mcp"
         )
         == "https://explicit.example/mcp"
+    )
+
+
+def test_resolve_mcp_url_prefers_render_hostname_over_stale_url(monkeypatch):
+    monkeypatch.setenv("TEST_MCP_URL", "http://localhost:9999/mcp")
+    monkeypatch.setenv("TEST_MCP_HOST", "tripweaver-flight-mcp-abcd.onrender.com")
+
+    assert (
+        mcp_client._resolve_mcp_url(
+            "TEST_MCP_URL", "TEST_MCP_HOST", "http://localhost:9999/mcp"
+        )
+        == "https://tripweaver-flight-mcp-abcd.onrender.com/mcp"
     )
 
 
