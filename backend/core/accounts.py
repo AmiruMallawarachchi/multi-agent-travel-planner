@@ -115,6 +115,17 @@ def _connect() -> _Connection:
     return connection
 
 
+def account_storage_status() -> dict[str, str]:
+    """Return a sanitized health summary for account persistence."""
+    backend = "postgres" if _uses_postgres() else "sqlite"
+    try:
+        with _connect() as connection:
+            connection.execute(_sql("SELECT 1"))
+        return {"backend": backend, "status": "available"}
+    except Exception:  # noqa: BLE001 - health must not leak connection details
+        return {"backend": backend, "status": "unavailable"}
+
+
 def _ensure_schema(connection: _Connection) -> None:
     statements = (
         """
