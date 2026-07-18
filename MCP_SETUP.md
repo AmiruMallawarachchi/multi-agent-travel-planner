@@ -250,6 +250,11 @@ Render injects each MCP service's `RENDER_EXTERNAL_HOSTNAME` into the backend as
 converts those hostnames to HTTPS `/mcp` URLs and connects through
 `MultiServerMCPClient` with streamable HTTP.
 
+The Blueprint uses dedicated Render names for the provider-backed services:
+`tripweaver-hotel-search-mcp`, `tripweaver-flight-search-mcp`, and
+`tripweaver-place-search-mcp`. These names avoid binding a new Blueprint to
+retired manually created services that still own the shorter public URLs.
+
 When a generated `*_MCP_HOST` is present, it takes precedence over the matching
 `*_MCP_URL`. This prevents stale manual URLs from bypassing the service wired by
 the current Blueprint. Set complete `*_MCP_URL` values only when deploying the
@@ -275,6 +280,10 @@ proof requires `tool_runtime.mode` to be `mcp`, transport to be
 `streamable_http`, all six servers to be `available`, and
 `configured_servers` to be `6`. See `BOOTCAMP_DEPLOYMENT.md` for the complete
 Blueprint procedure and free-tier limitations.
+
+The Render backend sets `MCP_HEALTH_TIMEOUT_SECONDS=70` so an explicit
+readiness request can wait for sleeping free services. Local development keeps
+the shorter two-second default.
 
 `TRIPWEAVER_TOOL_MODE=local` is retained only as an explicit local-development
 fallback. It does not prove MCP transport and must not be used for the assessed
