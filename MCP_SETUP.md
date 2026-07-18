@@ -237,18 +237,43 @@ must not be part of CI.
 
 ## Deployment
 
-Deploy each MCP directory as a separate Railway or container service:
+`render.yaml` deploys all six MCP directories as independent Render services
+and deploys the backend as a seventh service. Production must use:
 
-1. Select the MCP directory as the service root.
-2. Use its committed `Dockerfile` or `railway.json`.
-3. Add only that service's environment variables in the deployment secret
-   store.
-4. Confirm `/health` returns `{"status":"ok", ...}`.
-5. Put each public `/mcp` URL in the backend service variables.
-6. Set matching backend `TRIPWEAVER_API_KEYS` and frontend `BACKEND_API_KEY`.
+```text
+TRIPWEAVER_TOOL_MODE=mcp
+```
 
-The MCP services do not expose the OpenAI key. Only the backend needs
-`OPENAI_API_KEY`.
+Render injects each MCP service's `RENDER_EXTERNAL_HOSTNAME` into the backend as
+`HOTEL_MCP_HOST`, `FLIGHT_MCP_HOST`, `ITINERARY_MCP_HOST`,
+`WEATHER_MCP_HOST`, `CURRENCY_MCP_HOST`, or `LOCATION_MCP_HOST`. The backend
+converts those hostnames to HTTPS `/mcp` URLs and connects through
+`MultiServerMCPClient` with streamable HTTP.
+
+For a manual container deployment, set the complete public URLs instead:
+
+```text
+HOTEL_MCP_URL=https://YOUR_HOTEL_SERVICE/mcp
+FLIGHT_MCP_URL=https://YOUR_FLIGHT_SERVICE/mcp
+ITINERARY_MCP_URL=https://YOUR_ITINERARY_SERVICE/mcp
+WEATHER_MCP_URL=https://YOUR_WEATHER_SERVICE/mcp
+CURRENCY_MCP_URL=https://YOUR_CURRENCY_SERVICE/mcp
+LOCATION_MCP_URL=https://YOUR_LOCATION_SERVICE/mcp
+```
+
+Add provider credentials only to the services that require them. The MCP
+services do not receive the OpenAI key, and the backend does not receive the
+SerpApi key in MCP mode. Only the backend needs `OPENAI_API_KEY`.
+
+Confirm every MCP `/health` endpoint, then check backend `/health`. Runtime
+proof requires `tool_runtime.mode` to be `mcp`, transport to be
+`streamable_http`, all six servers to be `available`, and
+`configured_servers` to be `6`. See `BOOTCAMP_DEPLOYMENT.md` for the complete
+Blueprint procedure and free-tier limitations.
+
+`TRIPWEAVER_TOOL_MODE=local` is retained only as an explicit local-development
+fallback. It does not prove MCP transport and must not be used for the assessed
+deployment.
 
 ## Adding another MCP service
 

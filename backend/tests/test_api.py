@@ -52,6 +52,21 @@ def _client(
 
 
 class TestApiSecurity:
+    def test_liveness_does_not_probe_mcp_dependencies(self, monkeypatch):
+        async def unexpected_probe():
+            raise AssertionError("liveness must not probe MCP services")
+
+        monkeypatch.setattr(routes, "get_server_statuses", unexpected_probe)
+        client = _client(monkeypatch)
+
+        response = client.get("/health/live")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "status": "ok",
+            "service": "tripweaver-backend",
+        }
+
     def test_health_is_unauthenticated(self, monkeypatch):
         async def statuses():
             return {
@@ -64,6 +79,15 @@ class TestApiSecurity:
             }
 
         monkeypatch.setattr(routes, "get_server_statuses", statuses)
+        monkeypatch.setattr(
+            routes,
+            "tool_runtime_info",
+            lambda: {
+                "mode": "mcp",
+                "transport": "streamable_http",
+                "configured_servers": 6,
+            },
+        )
         client = _client(monkeypatch)
         response = client.get("/health")
         assert response.status_code == 200
@@ -79,6 +103,11 @@ class TestApiSecurity:
                 "location-mcp": "unavailable",
             },
             "account_storage": {"backend": "sqlite", "status": "available"},
+            "tool_runtime": {
+                "mode": "mcp",
+                "transport": "streamable_http",
+                "configured_servers": 6,
+            },
         }
 
     def test_session_requires_api_key_when_configured(self, monkeypatch):
