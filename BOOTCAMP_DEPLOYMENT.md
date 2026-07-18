@@ -1,163 +1,110 @@
 # TripWeaver bootcamp deployment
 
-This is the zero-payment demo path:
+This guide deploys the assessed MCP architecture without putting provider code
+inside the backend process:
 
 ```text
-Vercel Hobby frontend
-  -> Render Free FastAPI backend
-  -> Supabase Free Postgres for accounts and conversation history
+Vercel Hobby (Next.js)
+  -> Render Free (FastAPI backend)
+      -> Render Free (Hotel MCP)    -> SerpApi Google Hotels
+      -> Render Free (Flight MCP)   -> SerpApi Google Flights
+      -> Render Free (Itinerary MCP)
+      -> Render Free (Weather MCP)  -> Open-Meteo
+      -> Render Free (Currency MCP) -> Frankfurter
+      -> Render Free (Location MCP) -> SerpApi / Nominatim
+  -> Supabase Free (Postgres and Google identity verification)
 ```
 
-Do not paste secrets into chat, commit them, or place them in `.env` files that
-Git can track. Add secrets only inside the Vercel, Render, and Supabase
-dashboards.
+The backend uses LangChain's `MultiServerMCPClient` with streamable HTTP. Local
+tool adapters remain available only as a development fallback.
 
-## 1. GitHub
+Never paste secrets into chat, commit them, or put them in tracked `.env`
+files. Store secrets only in the Render, Vercel, and Supabase dashboards.
 
-Repository:
+## 1. Deploy the Render Blueprint
+
+The repository's `render.yaml` defines the backend and all six MCP services.
+
+1. Merge the release branch into `main` after CI passes.
+2. In Render, choose **New -> Blueprint**.
+3. Connect `AmiruMallawarachchi/multi-agent-travel-planner`.
+4. Select `render.yaml` and apply the Blueprint.
+5. Confirm that Render creates these seven web services:
 
 ```text
-https://github.com/AmiruMallawarachchi/multi-agent-travel-planner
+tripweaver-backend
+tripweaver-hotel-mcp
+tripweaver-flight-mcp
+tripweaver-itinerary-mcp
+tripweaver-weather-mcp
+tripweaver-currency-mcp
+tripweaver-location-mcp
 ```
 
-All deploy platforms should connect to this repository. Codex can keep working
-by pushing feature branches and pull requests to GitHub; Vercel and Render can
-then deploy from those branches or from `dev` after you merge.
-
-## 2. Supabase
-
-Create a new Supabase project for TripWeaver.
-
-Copy the database connection string from:
+The Blueprint automatically injects each MCP service's Render hostname into
+the backend and sets:
 
 ```text
-Supabase project -> Project Settings -> Database -> Connection string
+TRIPWEAVER_TOOL_MODE=mcp
 ```
 
-Use the pooled connection string when available. It usually starts with
-`postgresql://` and contains your database password. This value is the backend
-`DATABASE_URL`.
+Do not change that production value to `local`.
 
-If the database password contains special characters, use the Supabase-provided
-encoded connection string or percent-encode the password before pasting it into
-Render. After any database URL has been exposed in chat, reset the Supabase
-database password and use the new connection string only in Render.
+### Render secrets
 
-Copy the publishable browser values from:
+Enter `SERPAPI_API_KEY` on `tripweaver-hotel-mcp`. The Blueprint shares that
+secret with the flight and location MCP services. Render prompts for
+`sync: false` values during initial Blueprint creation. When synchronizing an
+existing Blueprint, Render ignores newly added `sync: false` entries, so add
+any missing secret manually in the affected service's **Environment** page.
+
+Enter these secrets on `tripweaver-backend`:
 
 ```text
-Supabase project -> Project Settings -> API
+OPENAI_API_KEY=your OpenAI key
+TRIPWEAVER_API_KEYS=one long random API key
+DATABASE_URL=your Supabase pooled Postgres URL
+ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your Supabase publishable key
 ```
 
-These values go in Vercel only:
+The backend does not need `SERPAPI_API_KEY` in MCP mode. Provider credentials
+belong only to the MCP services that use them.
+
+## 2. Configure Supabase
+
+Use the pooled Postgres connection string from **Project Settings -> Database**
+as Render's `DATABASE_URL`. Percent-encode special characters in the password,
+or use the encoded connection string supplied by Supabase.
+
+Copy the browser-safe values from **Project Settings -> API**:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ```
 
-Supabase is used here as managed Postgres storage for:
-
-- users
-- auth sessions
-- linked Google identities
-- per-user conversation history
-
-TripWeaver still owns account records and history authorization. Supabase Auth
-is also used to verify optional Google sign-in without exposing Google secrets
-to the browser.
+Only the publishable key may be exposed to the frontend. Never expose a secret
+or service-role key.
 
 ### Google sign-in
 
-1. In Google Auth Platform, create a Web application OAuth client.
-2. Add your Vercel URL as an authorized JavaScript origin.
+1. Create a Web application OAuth client in Google Auth Platform.
+2. Add the Vercel URL as an authorized JavaScript origin.
 3. Add `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback` as an authorized
    redirect URI.
-4. In Supabase, open Authentication -> Providers -> Google, enable the provider,
-   and enter the Google client ID and client secret.
-5. In Supabase Authentication -> URL Configuration, set the Site URL to your
-   Vercel URL and add `https://YOUR_VERCEL_URL/auth/callback` to Redirect URLs.
+4. Enable Google in **Supabase Authentication -> Providers** and enter the
+   Google client ID and secret there.
+5. In **Authentication -> URL Configuration**, set the Site URL to the Vercel
+   URL and add `https://YOUR_VERCEL_URL/auth/callback` to Redirect URLs.
 
-Do not put the Google client secret in Vercel, Render, Git, or frontend code.
+TripWeaver verifies the Supabase identity on the backend before creating its
+own account-scoped session.
 
-## 3. Render backend
+## 3. Configure Vercel
 
-Use Render Blueprint or create one web service manually.
-
-### Blueprint path
-
-1. Render -> New -> Blueprint
-2. Select the GitHub repository.
-3. Render reads `render.yaml`.
-4. Create the `tripweaver-backend` service on the Free plan.
-
-### Manual path
-
-Use these settings if you create the Render service manually:
-
-```text
-Service type: Web Service
-Repository: AmiruMallawarachchi/multi-agent-travel-planner
-Root directory: .
-Runtime: Docker
-Dockerfile: deploy/render/backend.Dockerfile
-Health check path: /health
-Plan: Free
-```
-
-Set these Render environment variables:
-
-```text
-OPENAI_API_KEY=your OpenAI key
-DATABASE_URL=your Supabase Postgres connection string
-TRIPWEAVER_API_KEYS=make one long random string
-ALLOWED_ORIGINS=https://your-vercel-project.vercel.app,http://localhost:3000
-ROUTER_MODEL=gpt-4o-mini
-AGENT_MODEL=gpt-4o-mini
-RATE_LIMIT_REQUESTS=20
-RATE_LIMIT_WINDOW_SECONDS=60
-MAX_MESSAGE_LENGTH=2000
-TRIPWEAVER_TOOL_MODE=local
-SUPABASE_URL=your Supabase project URL
-SUPABASE_PUBLISHABLE_KEY=your Supabase publishable key
-```
-
-Optional when live search tools are enabled:
-
-```text
-SERPAPI_API_KEY=your SerpApi key
-```
-
-After deploy, Render gives you a backend URL like:
-
-```text
-https://tripweaver-backend.onrender.com
-```
-
-Open:
-
-```text
-https://tripweaver-backend.onrender.com/health
-```
-
-Expected backend result:
-
-```json
-{
-  "status": "ok",
-  "service": "tripweaver-backend"
-}
-```
-
-## 4. Vercel frontend
-
-Your Vercel project is:
-
-```text
-https://vercel.com/amirunoel8-7855s-projects/multi-agent-travel-planner
-```
-
-Project settings should be:
+Use these project settings:
 
 ```text
 Framework: Next.js
@@ -167,87 +114,101 @@ Build Command: npm run build
 Output Directory: .next
 ```
 
-Set these Vercel environment variables:
+Set these environment variables for Production and Preview:
 
 ```text
-BACKEND_URL=https://tripweaver-backend.onrender.com
-BACKEND_API_KEY=the same value used in Render TRIPWEAVER_API_KEYS
-NEXT_PUBLIC_SUPABASE_URL=your Supabase project URL
+BACKEND_URL=https://tripweaver-backend-9fz2.onrender.com
+BACKEND_API_KEY=the exact value used by Render TRIPWEAVER_API_KEYS
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your Supabase publishable key
 ```
 
-Deploy Vercel after Render is live.
+Redeploy after changing environment variables.
 
-Open:
+## 4. Prove the deployed MCP runtime
+
+Start with the cheap liveness endpoint:
 
 ```text
-https://your-vercel-project.vercel.app/api/health
+https://tripweaver-backend-9fz2.onrender.com/health/live
 ```
 
-Expected frontend proxy result:
+Then open the readiness endpoint. It contacts all six MCP services and can take
+longer on the first request because Render Free services sleep:
+
+```text
+https://tripweaver-backend-9fz2.onrender.com/health
+```
+
+The important evidence is:
 
 ```json
 {
-  "online": true,
-  "backend": "online",
-  "service": "tripweaver-frontend"
+  "status": "ok",
+  "mcp_servers": {
+    "hotel-mcp": "available",
+    "flight-mcp": "available",
+    "itinerary-mcp": "available",
+    "weather-mcp": "available",
+    "currency-mcp": "available",
+    "location-mcp": "available"
+  },
+  "account_storage": {
+    "backend": "postgres",
+    "status": "available"
+  },
+  "tool_runtime": {
+    "mode": "mcp",
+    "transport": "streamable_http",
+    "configured_servers": 6
+  }
 }
 ```
 
-### Account sign-in troubleshooting
+Also open `/health` on each MCP service. The `/mcp` route is a protocol
+endpoint and is not expected to render a human-friendly browser page.
 
-If Google opens the account chooser and then returns to the TripWeaver sign-in
-dialog, the Google-to-Supabase step is working but the TripWeaver account
-exchange failed. Check these values:
+Finally verify the frontend proxy:
 
-- Render has `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
-- Render has `TRIPWEAVER_API_KEYS`.
-- Vercel has `BACKEND_URL` with no trailing slash.
-- Vercel has `BACKEND_API_KEY` exactly matching one Render
-  `TRIPWEAVER_API_KEYS` value.
-- Supabase Authentication URL Configuration has the Vercel site URL and
-  `https://YOUR_VERCEL_URL/auth/callback` in Redirect URLs.
+```text
+https://multi-agent-travel-planner-jet.vercel.app/api/health
+```
 
-Email/password sign-in or registration showing the account backend as
-unavailable usually means the Render service is sleeping, `BACKEND_URL` points
-to the wrong service, or `BACKEND_API_KEY` does not match Render.
+## 5. Manual Render setup
 
-## 5. What works on this free demo path
+Use this only if Render Blueprint creation is unavailable. Create six Docker
+web services using each service directory as its Docker context and its
+existing `Dockerfile`. Use `/health` as every MCP health path. Then create the
+backend with:
 
-This path supports:
+```text
+Dockerfile: deploy/render/backend.Dockerfile
+Health check path: /health/live
+TRIPWEAVER_TOOL_MODE=mcp
+HOTEL_MCP_URL=https://YOUR_HOTEL_SERVICE/mcp
+FLIGHT_MCP_URL=https://YOUR_FLIGHT_SERVICE/mcp
+ITINERARY_MCP_URL=https://YOUR_ITINERARY_SERVICE/mcp
+WEATHER_MCP_URL=https://YOUR_WEATHER_SERVICE/mcp
+CURRENCY_MCP_URL=https://YOUR_CURRENCY_SERVICE/mcp
+LOCATION_MCP_URL=https://YOUR_LOCATION_SERVICE/mcp
+```
 
-- polished responsive Next.js UI on Vercel
-- backend API on Render
-- user registration and login
-- optional Google sign-in through Supabase Auth
-- per-user conversation history persisted in Supabase Postgres
-- server-side proxying so browser users never receive backend API keys
-- OpenAI-backed general chat when `OPENAI_API_KEY` has quota
-- in-process flight, hotel, itinerary, weather, currency, and location tools
-  inside the single Render backend service
+## 6. Free-tier limits
 
-## 6. Current limitation
+This is a bootcamp demonstration deployment, not a production SLA:
 
-The bootcamp deployment uses `TRIPWEAVER_TOOL_MODE=local`, which keeps the demo
-inside one Render Free service by running tool adapters in the backend process.
-The full production architecture still uses six separate MCP services for
-stronger isolation and clearer ownership boundaries.
+- Render Free services can sleep, so the first request can be slow.
+- Seven Render services consume the workspace's shared free instance hours.
+- Provider quotas still apply to OpenAI and SerpApi.
+- `/health/live` is the Render health check so routine probes do not wake all
+  six MCP services; `/health` is the explicit readiness and architecture proof.
+- A real public product should add paid always-on compute, tracing, alerting,
+  backups, dependency scanning, and secret rotation.
 
-Provider-backed tools still depend on their upstream services:
+## 7. Booking boundary
 
-- OpenAI quota for chat
-- SerpApi quota for hotel, flight, and place search
-- Open-Meteo availability for weather/geocoding
-- Frankfurter availability and supported currency list for exchange rates
-
-## 7. Zero-payment safety
-
-Use only:
-
-- Vercel Hobby
-- Render Free
-- Supabase Free
-
-Do not add a credit card-only paid compute service for this demo. Render Free
-can sleep after inactivity, so the first request may be slow. That is acceptable
-for a bootcamp demo, but not for a real production launch.
+Flight and hotel booking confirmations are intentionally simulated. SerpApi is
+a search provider and does not create reservations. Real booking would require
+supplier contracts, payment handling, cancellation rules, and compliance work.
+The current tools demonstrate MCP tool selection, validation, confirmation
+state, and failure handling without pretending to complete a real transaction.
