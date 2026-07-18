@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements*.txt
+            mcp_servers/*/requirements.txt
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+          for requirements in mcp_servers/*/requirements.txt; do
+            python -m pip install -r "$requirements"
+          done
+      - name: Compile Python sources
+        run: python -m compileall -q backend mcp_servers
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest -q
+      - name: Run MCP server tests
+        run: python -m pytest -q mcp_servers
+
+  frontend-tests:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  container-builds:
+    name: Build ${{ matrix.name }} image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: .
+            dockerfile: deploy/render/backend.Dockerfile
+          - name: hotel-mcp
+            context: mcp_servers/hotel_mcp
+            dockerfile: mcp_servers/hotel_mcp/Dockerfile
+          - name: flight-mcp
+            context: mcp_servers/flight_mcp
+            dockerfile: mcp_servers/flight_mcp/Dockerfile
+          - name: itinerary-mcp
+            context: mcp_servers/itinerary_mcp
+            dockerfile: mcp_servers/itinerary_mcp/Dockerfile
+          - name: weather-mcp
+            context: mcp_servers/weather_mcp
+            dockerfile: mcp_servers/weather_mcp/Dockerfile
+          - name: currency-mcp
+            context: mcp_servers/currency_mcp
+            dockerfile: mcp_servers/currency_mcp/Dockerfile
+          - name: location-mcp
+            context: mcp_servers/location_mcp
+            dockerfile: mcp_servers/location_mcp/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --file "${{ matrix.dockerfile }}" "${{ matrix.context }}"

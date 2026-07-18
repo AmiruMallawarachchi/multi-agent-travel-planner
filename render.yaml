@@ -1,13 +1,108 @@
 services:
   - type: web
+    name: tripweaver-hotel-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/hotel_mcp/Dockerfile
+    dockerContext: ./mcp_servers/hotel_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: SERPAPI_API_KEY
+        sync: false
+
+  - type: web
+    name: tripweaver-flight-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/flight_mcp/Dockerfile
+    dockerContext: ./mcp_servers/flight_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: SERPAPI_API_KEY
+        fromService:
+          type: web
+          name: tripweaver-hotel-mcp
+          envVarKey: SERPAPI_API_KEY
+
+  - type: web
+    name: tripweaver-itinerary-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/itinerary_mcp/Dockerfile
+    dockerContext: ./mcp_servers/itinerary_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+
+  - type: web
+    name: tripweaver-weather-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/weather_mcp/Dockerfile
+    dockerContext: ./mcp_servers/weather_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+
+  - type: web
+    name: tripweaver-currency-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/currency_mcp/Dockerfile
+    dockerContext: ./mcp_servers/currency_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+
+  - type: web
+    name: tripweaver-location-mcp
+    runtime: docker
+    dockerfilePath: ./mcp_servers/location_mcp/Dockerfile
+    dockerContext: ./mcp_servers/location_mcp
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: SERPAPI_API_KEY
+        fromService:
+          type: web
+          name: tripweaver-hotel-mcp
+          envVarKey: SERPAPI_API_KEY
+
+  - type: web
     name: tripweaver-backend
     runtime: docker
-    rootDir: .
     dockerfilePath: ./deploy/render/backend.Dockerfile
     dockerContext: .
     plan: free
-    healthCheckPath: /health
-    autoDeployTrigger: commit
+    healthCheckPath: /health/live
+    autoDeployTrigger: checksPass
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
@@ -24,7 +119,37 @@ services:
       - key: MAX_MESSAGE_LENGTH
         value: "2000"
       - key: TRIPWEAVER_TOOL_MODE
-        value: local
+        value: mcp
+      - key: HOTEL_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-hotel-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: FLIGHT_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-flight-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: ITINERARY_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-itinerary-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: WEATHER_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-weather-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: CURRENCY_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-currency-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: LOCATION_MCP_HOST
+        fromService:
+          type: web
+          name: tripweaver-location-mcp
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
       - key: OPENAI_API_KEY
         sync: false
       - key: TRIPWEAVER_API_KEYS
@@ -33,5 +158,7 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
-      - key: SERPAPI_API_KEY
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
