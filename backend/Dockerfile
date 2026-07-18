@@ -14,5 +14,5 @@ COPY . .
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
-# Railway (and most PaaS) inject $PORT at runtime - fall back to 8000 locally.
+# Render and most PaaS providers inject $PORT at runtime; use 8000 locally.
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
