@@ -33,12 +33,12 @@ The repository's `render.yaml` defines the backend and all six MCP services.
 
 ```text
 tripweaver-backend
-tripweaver-hotel-mcp
-tripweaver-flight-mcp
+tripweaver-hotel-search-mcp
+tripweaver-flight-search-mcp
 tripweaver-itinerary-mcp
 tripweaver-weather-mcp
 tripweaver-currency-mcp
-tripweaver-location-mcp
+tripweaver-place-search-mcp
 ```
 
 The Blueprint automatically injects each MCP service's Render hostname into
@@ -57,11 +57,18 @@ manual setup described below.
 
 ### Render secrets
 
-Enter `SERPAPI_API_KEY` on `tripweaver-hotel-mcp`. The Blueprint shares that
-secret with the flight and location MCP services. Render prompts for
+Enter `SERPAPI_API_KEY` on `tripweaver-hotel-search-mcp`. The Blueprint shares
+that secret with the flight and location MCP services. Render prompts for
 `sync: false` values during initial Blueprint creation. When synchronizing an
 existing Blueprint, Render ignores newly added `sync: false` entries, so add
 any missing secret manually in the affected service's **Environment** page.
+
+The provider-backed MCP services intentionally use dedicated `*-search-mcp`
+names. Earlier manually created services with the shorter names can point to
+retired images while still occupying their public Render URLs. After the three
+new services pass `/health` and the backend reports them available, the retired
+`tripweaver-hotel-mcp`, `tripweaver-flight-mcp`, and
+`tripweaver-location-mcp` services can be deleted from the Render dashboard.
 
 Enter these secrets on `tripweaver-backend`:
 
@@ -139,7 +146,7 @@ https://tripweaver-backend-9fz2.onrender.com/health/live
 ```
 
 Then open the readiness endpoint. It contacts all six MCP services and can take
-longer on the first request because Render Free services sleep:
+up to about 70 seconds on the first request because Render Free services sleep:
 
 ```text
 https://tripweaver-backend-9fz2.onrender.com/health
@@ -184,6 +191,19 @@ If only some services remain `unavailable`:
    dashboard unambiguous, then redeploy the backend.
 5. On the free plan, open the affected service's `/health` once and allow its
    cold start to finish before checking backend readiness again.
+
+After migrating from the retired provider service names, verify these three
+endpoints directly before checking the backend:
+
+```text
+https://tripweaver-hotel-search-mcp.onrender.com/health
+https://tripweaver-flight-search-mcp.onrender.com/health
+https://tripweaver-place-search-mcp.onrender.com/health
+```
+
+Render can add a suffix when a preferred public hostname is already taken. If
+that happens, use the URL displayed on the service page; the Blueprint still
+injects the correct generated hostname into the backend.
 
 Finally verify the frontend proxy:
 
