@@ -7,11 +7,23 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class LivenessResponse(BaseModel):
+    status: Literal["ok"]
+    service: str
+
+
+class ToolRuntimeResponse(BaseModel):
+    mode: Literal["mcp", "local"]
+    transport: Literal["streamable_http", "in_process"]
+    configured_servers: int = Field(..., ge=0)
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     service: str
     mcp_servers: dict[str, Literal["available", "unavailable"]]
     account_storage: dict[str, str] | None = None
+    tool_runtime: ToolRuntimeResponse
 
 
 class SessionResponse(BaseModel):

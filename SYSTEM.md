@@ -76,10 +76,10 @@ The full topology has eight deployable processes. MCP services do not import
 backend agent code, and backend agents do not import provider clients. HTTP plus
 MCP is the boundary between them.
 
-The bootcamp deployment can set `TRIPWEAVER_TOOL_MODE=local` so the backend
-loads equivalent in-process tool adapters instead of connecting to six separate
-MCP web services. That mode is for constrained demo hosting such as Render Free;
-the MCP service boundary remains the production ownership model.
+The Render bootcamp deployment uses `TRIPWEAVER_TOOL_MODE=mcp`. Each capability
+runs as an independent Render web service and the backend reaches it over
+streamable HTTP. `TRIPWEAVER_TOOL_MODE=local` is retained only as an explicit
+development fallback; it is not the assessed deployment path.
 
 ## 3. Layer responsibilities
 
@@ -115,6 +115,7 @@ The backend exposes:
 
 | Route | Purpose |
 | --- | --- |
+| `GET /health/live` | Cheap backend-process liveness check without dependency probes |
 | `GET /health` | Backend state plus reachability of all six MCP health endpoints |
 | `POST /session` | Generate a validated conversation session ID |
 | `POST /auth/register` | Create an account and issue an opaque account token |
@@ -169,14 +170,15 @@ process remains alive. It is not durable and is not shared across replicas.
 
 `backend/agents/mcp_client.py` is the backend module that knows MCP service
 URLs and decides whether tools are discovered over MCP or loaded in-process for
-the bootcamp demo. It owns:
+local development. It owns:
 
 - the six-server registry
 - server-scoped tool discovery
 - independent circuit breakers
 - health probes
 - controlled degradation when discovery fails
-- `TRIPWEAVER_TOOL_MODE=local` support for single-service demo deployments
+- non-secret runtime diagnostics proving the active tool mode and transport
+- `TRIPWEAVER_TOOL_MODE=local` support for local fallback development
 
 Tool loading uses:
 
@@ -191,7 +193,7 @@ be bound to a closed stream after discovery exits.
 Each circuit opens after three consecutive discovery failures and cools down
 for 60 seconds. Breakers are process-local.
 
-When local mode is enabled, `backend/agents/local_tools.py` exposes tools with
+When local mode is explicitly enabled, `backend/agents/local_tools.py` exposes tools with
 the same names as the MCP tools and reuses the provider/domain clients from
 `mcp_servers/`. Health reports registered tool groups as available because no
 external MCP process needs to be probed.
@@ -356,12 +358,13 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 | `WEATHER_MCP_URL` | Weather MCP `/mcp` URL |
 | `CURRENCY_MCP_URL` | Currency MCP `/mcp` URL |
 | `LOCATION_MCP_URL` | Location MCP `/mcp` URL |
+| `*_MCP_HOST` | Render public host fallback used to construct the matching `/mcp` URL |
 | `TRIPWEAVER_API_KEYS` | Comma-separated accepted API keys |
 | `TRIPWEAVER_DB_PATH` | SQLite path for account and conversation persistence |
 | `DATABASE_URL` | Optional Postgres/Supabase URL for account and conversation persistence |
 | `SUPABASE_URL` | Supabase Auth project URL used to validate social-login tokens |
 | `SUPABASE_PUBLISHABLE_KEY` | Publishable key used for server-side Supabase token validation |
-| `TRIPWEAVER_TOOL_MODE` | `mcp` for service discovery, `local` for single-service demo tools |
+| `TRIPWEAVER_TOOL_MODE` | `mcp` for deployed service discovery, `local` for development fallback |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins |
 | `RATE_LIMIT_REQUESTS` | Requests allowed per local window |
 | `RATE_LIMIT_WINDOW_SECONDS` | Local rate-limit window |
@@ -447,10 +450,9 @@ Required release checks are documented in [README.md](./README.md).
 Recommended next production steps:
 
 1. Move checkpointer, rate limiting, and circuit state to shared durable stores.
-2. Add CI gates for Python/frontend tests, lint, type checks, builds, and secret
-   scanning.
-3. Add OpenTelemetry traces and metrics around graph, LLM, MCP, and provider calls.
-4. Move account history and graph memory to managed Postgres, and rate limiting
+2. Add OpenTelemetry traces and metrics around graph, LLM, MCP, and provider calls.
+3. Add dependency, container, and secret scanning to the existing CI gates.
+4. Move graph memory to managed Postgres, and rate limiting
    to Redis.
 5. Pin and automate dependency updates with reproducible lock artifacts.
 6. Add a deliberate multi-capability planning workflow with bounded parallelism.

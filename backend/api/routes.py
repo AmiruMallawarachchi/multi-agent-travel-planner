@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from agents.graph import graph
-from agents.mcp_client import get_server_statuses
+from agents.mcp_client import get_server_statuses, tool_runtime_info
 from api.schemas import (
     AuthResponse,
     ChatRequest,
@@ -18,6 +18,7 @@ from api.schemas import (
     ConversationsResponse,
     ExternalAuthRequest,
     HealthResponse,
+    LivenessResponse,
     LoginRequest,
     PlanSyncRequest,
     PlansResponse,
@@ -63,6 +64,12 @@ logger = logging.getLogger("tripweaver")
 router = APIRouter()
 
 
+@router.get("/health/live", response_model=LivenessResponse)
+async def liveness() -> LivenessResponse:
+    """Cheap process check that does not wake or probe downstream services."""
+    return LivenessResponse(status="ok", service="tripweaver-backend")
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(
@@ -70,6 +77,7 @@ async def health() -> HealthResponse:
         service="tripweaver-backend",
         mcp_servers=await get_server_statuses(),
         account_storage=account_storage_status(),
+        tool_runtime=tool_runtime_info(),
     )
 
 

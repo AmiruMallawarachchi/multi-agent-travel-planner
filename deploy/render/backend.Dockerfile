@@ -9,12 +9,11 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend backend
-COPY mcp_servers mcp_servers
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app/backend:/app \
-    TRIPWEAVER_TOOL_MODE=local
+    PYTHONPATH=/app/backend \
+    TRIPWEAVER_TOOL_MODE=mcp
 
 EXPOSE 8000
 

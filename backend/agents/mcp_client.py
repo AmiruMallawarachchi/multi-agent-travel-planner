@@ -34,12 +34,39 @@ ServerName = Literal[
 ]
 ServerStatus = Literal["available", "unavailable"]
 
-HOTEL_MCP_URL = os.getenv("HOTEL_MCP_URL", "http://localhost:8001/mcp")
-FLIGHT_MCP_URL = os.getenv("FLIGHT_MCP_URL", "http://localhost:8002/mcp")
-ITINERARY_MCP_URL = os.getenv("ITINERARY_MCP_URL", "http://localhost:8003/mcp")
-WEATHER_MCP_URL = os.getenv("WEATHER_MCP_URL", "http://localhost:8004/mcp")
-CURRENCY_MCP_URL = os.getenv("CURRENCY_MCP_URL", "http://localhost:8005/mcp")
-LOCATION_MCP_URL = os.getenv("LOCATION_MCP_URL", "http://localhost:8006/mcp")
+
+def _resolve_mcp_url(url_env: str, host_env: str, default: str) -> str:
+    """Resolve an explicit MCP URL or a Render-generated public hostname."""
+    explicit_url = os.getenv(url_env, "").strip()
+    if explicit_url:
+        return explicit_url
+
+    host = os.getenv(host_env, "").strip().rstrip("/")
+    if not host:
+        return default
+
+    base_url = host if "://" in host else f"https://{host}"
+    return f"{base_url}/mcp"
+
+
+HOTEL_MCP_URL = _resolve_mcp_url(
+    "HOTEL_MCP_URL", "HOTEL_MCP_HOST", "http://localhost:8001/mcp"
+)
+FLIGHT_MCP_URL = _resolve_mcp_url(
+    "FLIGHT_MCP_URL", "FLIGHT_MCP_HOST", "http://localhost:8002/mcp"
+)
+ITINERARY_MCP_URL = _resolve_mcp_url(
+    "ITINERARY_MCP_URL", "ITINERARY_MCP_HOST", "http://localhost:8003/mcp"
+)
+WEATHER_MCP_URL = _resolve_mcp_url(
+    "WEATHER_MCP_URL", "WEATHER_MCP_HOST", "http://localhost:8004/mcp"
+)
+CURRENCY_MCP_URL = _resolve_mcp_url(
+    "CURRENCY_MCP_URL", "CURRENCY_MCP_HOST", "http://localhost:8005/mcp"
+)
+LOCATION_MCP_URL = _resolve_mcp_url(
+    "LOCATION_MCP_URL", "LOCATION_MCP_HOST", "http://localhost:8006/mcp"
+)
 
 MCP_SERVER_URLS: dict[ServerName, str] = {
     "hotel-mcp": HOTEL_MCP_URL,
@@ -85,7 +112,7 @@ _breakers: dict[ServerName, _Breaker] = {
 # its explicitly configured server set.
 _client = MultiServerMCPClient(
     {
-        server: {"url": url, "transport": "http"}
+        server: {"url": url, "transport": "streamable_http"}
         for server, url in MCP_SERVER_URLS.items()
     }
 )
@@ -97,6 +124,16 @@ def breaker_open(server: ServerName) -> bool:
 
 def using_local_tools() -> bool:
     return TOOL_MODE in {"local", "in-process", "in_process"}
+
+
+def tool_runtime_info() -> dict[str, str | int]:
+    """Return non-secret runtime evidence for health checks and demonstrations."""
+    is_local = using_local_tools()
+    return {
+        "mode": "local" if is_local else "mcp",
+        "transport": "in_process" if is_local else "streamable_http",
+        "configured_servers": len(MCP_SERVER_URLS),
+    }
 
 
 async def get_tools_for(server: ServerName) -> list:

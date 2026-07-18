@@ -21,7 +21,7 @@ Demo note: Render Free can sleep after inactivity. If the first request is slow 
 
 - Intent-routed LangGraph orchestration with separate specialist agents.
 - Least-privilege tool binding: flight agents cannot call hotel tools, weather agents cannot call currency tools, and so on.
-- MCP-style provider isolation with a free-tier deployment mode that can collapse tools into one Render service for bootcamp demos.
+- Six standalone FastMCP services discovered over streamable HTTP in the deployed runtime.
 - Server-side API proxying so browser users never receive OpenAI, SerpApi, database, or backend API secrets.
 - Account-backed history and plan folders with per-user isolation.
 - Structured result rendering for flights, hotels, itineraries, weather, currency, and locations.
@@ -46,12 +46,12 @@ flowchart LR
     Router --> Currency[Currency agent]
     Router --> Location[Location agent]
 
-    Flight --> FlightTools[Flight tools]
-    Hotel --> HotelTools[Hotel tools]
-    Itinerary --> ItineraryTools[Itinerary tools]
-    Weather --> WeatherTools[Weather tools]
-    Currency --> CurrencyTools[Currency tools]
-    Location --> LocationTools[Location tools]
+    Flight --> FlightTools[Flight MCP]
+    Hotel --> HotelTools[Hotel MCP]
+    Itinerary --> ItineraryTools[Itinerary MCP]
+    Weather --> WeatherTools[Weather MCP]
+    Currency --> CurrencyTools[Currency MCP]
+    Location --> LocationTools[Location MCP]
 
     FlightTools --> SerpApi[SerpApi Google Flights]
     HotelTools --> SerpApiHotels[SerpApi Google Hotels]
@@ -97,7 +97,10 @@ flowchart TB
     Backend --> LocationMCP
 ```
 
-The full production model has independent MCP services. The bootcamp/free deployment uses `TRIPWEAVER_TOOL_MODE=local`, which keeps the same tool contracts but runs adapters inside the single Render backend to avoid paying for six extra services.
+The Render Blueprint deploys every MCP capability as an independent web service.
+The backend uses `MultiServerMCPClient` with streamable HTTP and does not bundle
+provider adapters in its production image. `TRIPWEAVER_TOOL_MODE=local` remains
+available only as an explicit local-development fallback.
 
 ## Request Lifecycle
 
@@ -107,17 +110,17 @@ sequenceDiagram
     participant F as Next.js frontend
     participant B as FastAPI backend
     participant G as LangGraph router
-    participant T as Specialist tool
+    participant M as Standalone MCP service
     participant P as Provider
 
     U->>F: Send travel message
     F->>B: POST /chat/stream with backend API key
     B->>B: Validate, rate-limit, create session
     B->>G: Route intent
-    G->>T: Call only allowed tool group
-    T->>P: Provider request when needed
-    P-->>T: Raw provider data
-    T-->>G: Normalized result
+    G->>M: Discover and invoke only the allowed MCP tools
+    M->>P: Provider request when needed
+    P-->>M: Raw provider data
+    M-->>G: Normalized MCP result
     G-->>B: Agent response and tool events
     B-->>F: SSE events and structured result payloads
     F-->>U: Chat message, cards, status, trip context
@@ -188,9 +191,11 @@ mcp_servers/
   currency_mcp/           Frankfurter currency service
   location_mcp/           geocoding and place-search service
 
-deploy/render/            Render Free backend Dockerfile
+deploy/render/            Render backend Dockerfile
+.github/workflows/        Python, frontend, and container CI
 SYSTEM.md                 implemented architecture and trust boundaries
 BOOTCAMP_DEPLOYMENT.md    Vercel + Render + Supabase deployment guide
+BOOTCAMP_CRITERIA.md      assessed requirements and evidence matrix
 DEPLOYMENT.md             single-VM production deployment guide
 ```
 
@@ -203,16 +208,25 @@ OPENAI_API_KEY=...
 DATABASE_URL=postgresql://...
 TRIPWEAVER_API_KEYS=one-long-random-secret
 ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
-TRIPWEAVER_TOOL_MODE=local
+TRIPWEAVER_TOOL_MODE=mcp
+HOTEL_MCP_HOST=tripweaver-hotel-mcp.onrender.com
+FLIGHT_MCP_HOST=tripweaver-flight-mcp.onrender.com
+ITINERARY_MCP_HOST=tripweaver-itinerary-mcp.onrender.com
+WEATHER_MCP_HOST=tripweaver-weather-mcp.onrender.com
+CURRENCY_MCP_HOST=tripweaver-currency-mcp.onrender.com
+LOCATION_MCP_HOST=tripweaver-location-mcp.onrender.com
 SUPABASE_URL=https://zkxzsnudgzsdqlvvinbi.supabase.co
 SUPABASE_PUBLISHABLE_KEY=...
-SERPAPI_API_KEY=...
 ROUTER_MODEL=gpt-4o-mini
 AGENT_MODEL=gpt-4o-mini
 RATE_LIMIT_REQUESTS=20
 RATE_LIMIT_WINDOW_SECONDS=60
 MAX_MESSAGE_LENGTH=2000
 ```
+
+Render injects the six `*_MCP_HOST` values from the corresponding services in
+`render.yaml`; they are listed here to make the runtime contract explicit.
+`SERPAPI_API_KEY` belongs only to the hotel, flight, and location MCP services.
 
 ### Vercel frontend
 
@@ -269,6 +283,11 @@ Expected backend health after this branch is deployed:
   "account_storage": {
     "backend": "postgres",
     "status": "available"
+  },
+  "tool_runtime": {
+    "mode": "mcp",
+    "transport": "streamable_http",
+    "configured_servers": 6
   }
 }
 ```
@@ -344,7 +363,8 @@ Use these exact checks before presenting the project.
 
 - Open https://tripweaver-backend-9fz2.onrender.com/health.
 - Confirm backend status is `ok`.
-- Confirm all MCP/tool groups are available.
+- Confirm all six MCP services are `available`.
+- Confirm `tool_runtime.mode` is `mcp` and transport is `streamable_http`.
 - Confirm `account_storage.status` is `available` after the latest backend deploy.
 
 ### 2. Email/password auth
@@ -446,8 +466,8 @@ This is a strong demo and portfolio architecture, but these items remain before 
 
 - Replace Render Free with paid always-on infrastructure or a VM/container platform with uptime guarantees.
 - Move LangGraph memory and rate limiting to shared durable stores.
-- Add CI gates for all backend/frontend checks.
 - Add structured logs, metrics, traces, and alerting.
+- Add dependency and secret scanning to the existing test/build CI gates.
 - Add backup and restore procedures for account/history data.
 - Add real domain and HTTPS-first production configuration.
 - Keep booking simulated unless real payment, supplier, cancellation, and compliance workflows are intentionally built.
@@ -458,5 +478,6 @@ This is a strong demo and portfolio architecture, but these items remain before 
 - [SECURITY.md](./SECURITY.md): threat model and deployment checklist.
 - [MCP_SETUP.md](./MCP_SETUP.md): provider contracts and MCP service setup.
 - [BOOTCAMP_DEPLOYMENT.md](./BOOTCAMP_DEPLOYMENT.md): Vercel + Render + Supabase free demo deployment.
+- [BOOTCAMP_CRITERIA.md](./BOOTCAMP_CRITERIA.md): assessment criteria, evidence, limitations, and viva checks.
 - [DEPLOYMENT.md](./DEPLOYMENT.md): single-VM production deployment.
 - [frontend/README.md](./frontend/README.md): frontend implementation notes.
