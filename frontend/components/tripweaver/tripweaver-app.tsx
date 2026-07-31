@@ -47,6 +47,8 @@ import type {
   PlanFolder,
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
+import { ChatRequestError, describeFailure } from "@/features/tripweaver/chat-errors"
+import { composeRequest } from "@/features/tripweaver/compose-request"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
 import { cn } from "@/lib/utils"
 import { readJsonObject } from "@/lib/http-response"
@@ -538,13 +540,12 @@ export function TripWeaverApp() {
       tools: [],
       results: [],
     }
-    const requestMessage = [
-      content,
-      ...attachments.map(
-        (attachment) =>
-          `<attachment name="${attachment.name}">\n${attachment.content.slice(0, 15_000)}\n</attachment>`,
-      ),
-    ].join("\n\n")
+    const { message: requestMessage, trimmed } = composeRequest(content, attachments)
+    if (trimmed.length > 0) {
+      toast.info(
+        `Only the first part of ${trimmed.join(", ")} was sent - TripWeaver keeps each message short.`,
+      )
+    }
 
     setState((current) => ({
       ...current,
@@ -580,7 +581,7 @@ export function TripWeaverApp() {
       })
 
       if (!response.ok || !response.body) {
-        throw new Error(`Chat request failed with ${response.status}`)
+        throw new ChatRequestError(await describeFailure(response))
       }
 
       const reader = response.body.getReader()
@@ -604,17 +605,35 @@ export function TripWeaverApp() {
         })
         applyEvent(conversationId, assistantMessageId, { type: "done" })
       } else {
-        applyEvent(conversationId, assistantMessageId, {
-          type: "error",
-          message:
-            "I could not complete that request. Check that the TripWeaver backend and API credentials are available, then try again.",
-        })
-        toast.error("TripWeaver could not complete the request")
+        const message =
+          error instanceof ChatRequestError
+            ? error.message
+            : "I could not reach TripWeaver. Check your connection and try again."
+        applyEvent(conversationId, assistantMessageId, { type: "error", message })
+        toast.error(message)
       }
     } finally {
       setIsStreaming(false)
       abortRef.current = null
     }
+  }
+
+  /** Resend the request that produced a failed answer, as a fresh turn.
+   * Re-running the same prompt is what the traveller wants after a transient
+   * MCP failure, and it beats making them retype it. */
+  function retryMessage(assistantMessageId: string) {
+    if (isStreaming || !activeConversation) return
+
+    const messages = activeConversation.messages
+    const failedIndex = messages.findIndex(({ id }) => id === assistantMessageId)
+    if (failedIndex < 0) return
+
+    const original = messages
+      .slice(0, failedIndex)
+      .findLast(({ role }) => role === "user")
+    if (!original?.content) return
+
+    void sendMessage(original.content)
   }
 
   function startVoiceInput() {
@@ -866,6 +885,7 @@ export function TripWeaverApp() {
             onRemoveAttachment={(attachmentId) =>
               setAttachments((current) => current.filter(({ id }) => id !== attachmentId))
             }
+            onRetry={(messageId) => void retryMessage(messageId)}
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
             onStop={() => abortRef.current?.abort()}

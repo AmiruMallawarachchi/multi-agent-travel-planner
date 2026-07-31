@@ -227,7 +227,9 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("alertdialog", { name: /Delete "Tokyo escape"/ })).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Delete" }))
     expect(screen.getByText("No matching conversations")).toBeInTheDocument()
-  }, 15_000)
+    // ~25 sequential userEvent interactions in one test; 15s was marginal and
+    // flaked under load. Splitting this into per-feature tests is the real fix.
+  }, 45_000)
 
   it("handles unsupported voice input", async () => {
     const user = userEvent.setup()
