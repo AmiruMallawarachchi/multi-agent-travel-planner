@@ -79,7 +79,11 @@ def check_rate_limit(identity: str) -> None:
 # ---------------------------------------------------------------------------
 # Input validation
 # ---------------------------------------------------------------------------
-MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "2000"))
+# A typed message is well under 2000 characters, but the frontend inlines an
+# attached text file into the same field, so a 2000 cap rejected every real
+# attachment. Sized for one modest text file (~4k tokens) and still bounded -
+# per-identity rate limiting is what caps aggregate cost, not this.
+MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "16000"))
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 

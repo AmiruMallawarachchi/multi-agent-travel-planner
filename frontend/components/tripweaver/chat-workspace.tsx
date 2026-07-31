@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Mic,
   Paperclip,
+  RotateCcw,
   Share2,
   Sparkles,
   Square,
@@ -75,14 +76,19 @@ interface ChatWorkspaceProps {
   onInputChange: (input: string) => void
   onQuickReply: (messageId: string, value: string) => void
   onRemoveAttachment: (attachmentId: string) => void
+  onRetry: (messageId: string) => void
   onSend: (message?: string) => void
   onStartVoice: () => void
   onStop: () => void
 }
 
-function statusLabel(status: ToolActivity["status"]) {
-  if (status === "running") return "Searching..."
-  return status.charAt(0).toUpperCase() + status.slice(1)
+function statusLabel(tool: ToolActivity) {
+  // A running booking used to read "Hotel booking ... Searching...". The verb
+  // has to follow the tool, not every in-flight call.
+  if (tool.status === "running") {
+    return tool.id.includes("book") ? "Booking..." : "Searching..."
+  }
+  return tool.status.charAt(0).toUpperCase() + tool.status.slice(1)
 }
 
 function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
@@ -110,13 +116,23 @@ function ToolActivityPanel({ tools }: { tools: ToolActivity[] }) {
               ) : (
                 <CircleX className="size-3.5 text-rose-600" aria-hidden="true" />
               )}
-              {statusLabel(tool.status)}
+              {statusLabel(tool)}
             </span>
           </div>
         ))}
       </div>
     </div>
   )
+}
+
+function sendsOnEnter() {
+  // Touch keyboards have no Shift+Enter, so treating Enter as "send" everywhere
+  // left phone users unable to write a second line at all. On coarse pointers
+  // Enter inserts a newline and the send button submits.
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return true
+  }
+  return !window.matchMedia("(pointer: coarse)").matches
 }
 
 function looksLikeItinerary(content: string) {
@@ -168,6 +184,7 @@ function MessageBubble({
   account,
   onOpenItinerary,
   onQuickReply,
+  onRetry,
   quickRepliesDisabled,
 }: {
   message: ChatMessage
@@ -175,6 +192,7 @@ function MessageBubble({
   account: AccountUser | null
   onOpenItinerary: (message: ChatMessage, result?: StructuredResult) => void
   onQuickReply: (messageId: string, value: string) => void
+  onRetry: (messageId: string) => void
   quickRepliesDisabled: boolean
 }) {
   const isUser = message.role === "user"
@@ -276,6 +294,19 @@ function MessageBubble({
                 </TooltipTrigger>
                 <TooltipContent>Copy response</TooltipContent>
               </Tooltip>
+              {message.failed ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="glass-control glass-interactive ml-1 rounded-xl"
+                  onClick={() => onRetry(message.id)}
+                  disabled={quickRepliesDisabled}
+                >
+                  <RotateCcw aria-hidden="true" />
+                  Try again
+                </Button>
+              ) : null}
               {itineraryResult || looksLikeItinerary(message.content) ? (
                 <Button
                   type="button"
@@ -288,7 +319,10 @@ function MessageBubble({
                   View full itinerary
                 </Button>
               ) : null}
-              <time className="ml-auto text-[11px] text-muted-foreground">
+              <time
+                dateTime={message.createdAt}
+                className="ml-auto text-[11px] text-muted-foreground"
+              >
                 {formatConversationTime(message.createdAt)}
               </time>
             </div>
@@ -384,6 +418,7 @@ export function ChatWorkspace({
   onInputChange,
   onQuickReply,
   onRemoveAttachment,
+  onRetry,
   onSend,
   onStartVoice,
   onStop,
@@ -422,10 +457,18 @@ export function ChatWorkspace({
         <ConversationExport conversation={conversation} />
       </header>
 
+      {/* The transcript itself must not be a live region: every streamed token
+          mutates it, so a screen reader re-announced the whole conversation
+          on each chunk. Announce the activity instead, which changes once per
+          phase, and let the transcript be an ordinary log. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {isStreaming ? runtime.activity : ""}
+      </p>
+
       <div
         ref={messagesRef}
+        role="log"
         className="min-h-0 overscroll-contain overflow-y-auto px-2.5 py-3 sm:px-4 md:px-5"
-        aria-live="polite"
         onScroll={(event) => {
           const target = event.currentTarget
           shouldFollowRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 96
@@ -442,6 +485,7 @@ export function ChatWorkspace({
                 setItinerarySelection({ message: selectedMessage, result })
               }
               onQuickReply={onQuickReply}
+              onRetry={onRetry}
               quickRepliesDisabled={isStreaming}
             />
           ))}
@@ -485,11 +529,10 @@ export function ChatWorkspace({
                   aria-label="Message TripWeaver"
                   placeholder="Type your message..."
                   className="max-h-32 min-h-11 resize-none border-0 bg-transparent px-2 py-1.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
-                  disabled={isStreaming}
                   value={input}
                   onChange={(event) => onInputChange(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
+                    if (event.key === "Enter" && !event.shiftKey && sendsOnEnter()) {
                       event.preventDefault()
                       onSend()
                     }

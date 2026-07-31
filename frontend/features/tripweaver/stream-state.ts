@@ -287,7 +287,17 @@ export function applyStreamEvent(
       ...conversation,
       messages: conversation.messages.map((message) =>
         message.id === assistantMessageId
-          ? { ...message, content: message.content || event.message }
+          ? {
+              ...message,
+              // Append rather than replace. A failure part-way through a reply
+              // used to be discarded because the partial text was truthy,
+              // leaving an answer that stopped mid-sentence with no
+              // explanation anywhere the traveller could see it.
+              content: message.content
+                ? `${message.content.trimEnd()}\n\n${event.message}`
+                : event.message,
+              failed: true,
+            }
           : message,
       ),
     }
