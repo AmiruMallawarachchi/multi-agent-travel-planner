@@ -206,6 +206,7 @@ TRIPWEAVER_API_KEYS=one-long-random-secret
 ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
 TRIPWEAVER_TOOL_MODE=mcp
 MCP_HEALTH_TIMEOUT_SECONDS=70
+MCP_TOOL_TIMEOUT_SECONDS=90
 HOTEL_MCP_HOST=tripweaver-hotel-search-mcp.onrender.com
 FLIGHT_MCP_HOST=tripweaver-flight-search-mcp.onrender.com
 ITINERARY_MCP_HOST=tripweaver-itinerary-mcp.onrender.com

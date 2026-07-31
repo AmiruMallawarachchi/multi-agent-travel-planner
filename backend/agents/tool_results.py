@@ -46,6 +46,37 @@ def tool_result_text(raw_result: Any) -> str:
     return str(raw_result)
 
 
+# Which TripWeaverState field a search tool's payload belongs in, and the key
+# it arrives under. This is what makes SRS section 3 (Hotel / Flight as state
+# entities) and section 7 ("the schema is the single source of truth for what
+# one agent knows about another's work") literally true rather than aspirational.
+SEARCH_RESULT_FIELDS: dict[str, tuple[str, str]] = {
+    "list_hotels": ("hotel_results", "hotels"),
+    "search_hotels": ("hotel_results", "offers"),
+    "list_flights": ("flight_results", "flights"),
+    "search_flights": ("flight_results", "offers"),
+}
+
+
+def extract_search_results(
+    *, tool_name: str, raw_result: Any
+) -> tuple[str, list[dict[str, Any]]] | None:
+    """Return (state_field, rows) for a successful hotel/flight search."""
+    field = SEARCH_RESULT_FIELDS.get(tool_name)
+    if field is None:
+        return None
+
+    result = tool_result_dict(raw_result)
+    if not result or result.get("ok") is not True:
+        return None
+
+    state_field, payload_key = field
+    rows = result.get(payload_key)
+    if not isinstance(rows, list):
+        return None
+    return state_field, [row for row in rows if isinstance(row, dict)]
+
+
 def booking_type(tool_name: str) -> str | None:
     if tool_name == "book_hotel":
         return "hotel"

@@ -122,6 +122,8 @@ services:
         value: mcp
       - key: MCP_HEALTH_TIMEOUT_SECONDS
         value: "70"
+      - key: MCP_TOOL_TIMEOUT_SECONDS
+        value: "90"
       - key: HOTEL_MCP_HOST
         fromService:
           type: web
