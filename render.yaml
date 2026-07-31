@@ -117,7 +117,7 @@ services:
       - key: RATE_LIMIT_WINDOW_SECONDS
         value: "60"
       - key: MAX_MESSAGE_LENGTH
-        value: "16000"
+        value: "6000"
       - key: TRIPWEAVER_TOOL_MODE
         value: mcp
       - key: MCP_HEALTH_TIMEOUT_SECONDS

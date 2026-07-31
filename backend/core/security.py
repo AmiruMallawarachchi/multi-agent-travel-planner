@@ -81,9 +81,11 @@ def check_rate_limit(identity: str) -> None:
 # ---------------------------------------------------------------------------
 # A typed message is well under 2000 characters, but the frontend inlines an
 # attached text file into the same field, so a 2000 cap rejected every real
-# attachment. Sized for one modest text file (~4k tokens) and still bounded -
-# per-identity rate limiting is what caps aggregate cost, not this.
-MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "16000"))
+# attachment. 6000 fits a small text file (~1.5k tokens) while keeping the
+# worst-case prompt deliberately cheap. Note this is not the dominant cost:
+# a turn also carries the history window and tool results fenced at 4000 chars
+# each. Raise it only if attachments actually need to be bigger.
+MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "6000"))
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 

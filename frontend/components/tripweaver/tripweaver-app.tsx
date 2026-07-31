@@ -48,6 +48,7 @@ import type {
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
 import { ChatRequestError, describeFailure } from "@/features/tripweaver/chat-errors"
+import { composeRequest } from "@/features/tripweaver/compose-request"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
 import { cn } from "@/lib/utils"
 import { readJsonObject } from "@/lib/http-response"
@@ -539,13 +540,12 @@ export function TripWeaverApp() {
       tools: [],
       results: [],
     }
-    const requestMessage = [
-      content,
-      ...attachments.map(
-        (attachment) =>
-          `<attachment name="${attachment.name}">\n${attachment.content.slice(0, 15_000)}\n</attachment>`,
-      ),
-    ].join("\n\n")
+    const { message: requestMessage, trimmed } = composeRequest(content, attachments)
+    if (trimmed.length > 0) {
+      toast.info(
+        `Only the first part of ${trimmed.join(", ")} was sent - TripWeaver keeps each message short.`,
+      )
+    }
 
     setState((current) => ({
       ...current,
