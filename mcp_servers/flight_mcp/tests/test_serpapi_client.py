@@ -327,3 +327,29 @@ async def test_booking_remains_explicitly_simulated():
     assert confirmation["offer_id"] == "booking-token"
     assert confirmation["traveller_name"] == "Asha Perera"
     assert confirmation["simulated"] is True
+
+
+@pytest.mark.asyncio
+async def test_booking_accepts_a_real_length_provider_token():
+    """Live SerpApi booking_token values run past 200 characters.
+
+    The old cap sat at 200 and rejected every real flight booking; this test
+    uses a realistic length so a tightened bound fails here instead of in
+    production.
+    """
+    realistic_token = "W" * 212
+
+    confirmation = await flight_client.book_flight_offer(
+        realistic_token, "Asha Perera"
+    )
+
+    assert confirmation["offer_id"] == realistic_token
+    assert confirmation["simulated"] is True
+
+
+@pytest.mark.asyncio
+async def test_booking_still_refuses_an_absurd_offer_id():
+    with pytest.raises(flight_client.InvalidInputError):
+        await flight_client.book_flight_offer(
+            "W" * (flight_client.MAX_OFFER_ID_LENGTH + 1), "Asha Perera"
+        )
