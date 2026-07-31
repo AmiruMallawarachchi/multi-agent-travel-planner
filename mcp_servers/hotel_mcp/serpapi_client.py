@@ -12,6 +12,11 @@ import httpx
 
 DEFAULT_SERPAPI_BASE_URL = "https://serpapi.com/search.json"
 MAX_RESULTS = 10
+# A provider property_token is an opaque blob, not an identifier we mint. Today's
+# are short, but the flight service already shipped a booking_token past 200
+# characters and silently rejected every booking. Keep the bound clear of real
+# values - it exists to refuse absurd input, not to second-guess the provider.
+MAX_OFFER_ID_LENGTH = 2000
 REQUEST_TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
 
 _CURRENCY_RE = re.compile(r"^[A-Za-z]{3}$")
@@ -280,7 +285,7 @@ async def list_hotels(
 
 async def book_hotel_offer(offer_id: str, guest_name: str) -> dict[str, Any]:
     """Return a clearly labelled simulated booking confirmation."""
-    if not offer_id or len(offer_id) > 200:
+    if not offer_id or len(offer_id) > MAX_OFFER_ID_LENGTH:
         raise InvalidInputError("offer_id is missing or unreasonably long")
     guest_name = (guest_name or "").strip()[:200]
     if not guest_name:

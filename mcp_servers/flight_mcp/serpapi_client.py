@@ -12,6 +12,10 @@ import httpx
 
 DEFAULT_SERPAPI_BASE_URL = "https://serpapi.com/search.json"
 MAX_RESULTS = 10
+# A provider booking_token is an opaque blob, not an identifier we mint - live
+# ones already run past 200 characters, which silently rejected every booking.
+# The bound exists to refuse absurd input, so keep it well clear of real values.
+MAX_OFFER_ID_LENGTH = 2000
 REQUEST_TIMEOUT = httpx.Timeout(connect=5.0, read=20.0, write=10.0, pool=5.0)
 
 _AIRPORT_CODE_RE = re.compile(r"^[A-Za-z]{3}$")
@@ -315,7 +319,7 @@ async def list_flights(
 
 async def book_flight_offer(offer_id: str, traveller_name: str) -> dict[str, Any]:
     """Return a clearly labelled simulated booking confirmation."""
-    if not offer_id or len(offer_id) > 200:
+    if not offer_id or len(offer_id) > MAX_OFFER_ID_LENGTH:
         raise InvalidInputError("offer_id is missing or unreasonably long")
     traveller_name = (traveller_name or "").strip()[:200]
     if not traveller_name:
