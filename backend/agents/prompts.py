@@ -44,8 +44,11 @@ currency     - exchange rates, supported currencies, or converting a monetary am
 location     - finding attractions, restaurants, landmarks, or resolving a place location
 trip_budget  - estimating how much money a trip may cost, comparing travel budget levels,
                 or asking what a traveller should budget for a destination and duration
-clarify      - the request is ambiguous between specialists, or references a prior result
-                you cannot resolve ("book the second one") without more context
+clarify      - the request is ambiguous between specialists, or names no subject any
+                specialist could act on. A booking request is NEVER clarify: send hotel
+                bookings to hotel and flight bookings to flight. The specialist owns its
+                own domain - it resolves back-references like "book the second one" from
+                its earlier results and asks for any missing booking detail itself.
 end          - the traveller is only saying thanks/goodbye and needs a short closing reply
 
 Reply with one label only."""

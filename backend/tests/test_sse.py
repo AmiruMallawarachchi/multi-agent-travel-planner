@@ -212,6 +212,39 @@ def test_quick_reply_detection_ignores_statements_and_tool_call_rounds():
     ) == []
 
 
+def test_booking_tool_dispatch_announces_booking_activity():
+    events = list(
+        stream_events_from_graph_event(
+            {
+                "event": "on_tool_start",
+                "name": "book_hotel",
+                "metadata": {"langgraph_node": "hotel"},
+            }
+        )
+    )
+
+    assert events[0] == StatusEvent(state="BOOKING", node="hotel")
+    assert events[1].model_dump() == {
+        "type": "tool",
+        "status": "INVOKED",
+        "tool": "book_hotel",
+    }
+
+
+def test_search_tool_dispatch_does_not_announce_booking():
+    events = list(
+        stream_events_from_graph_event(
+            {
+                "event": "on_tool_start",
+                "name": "search_hotels",
+                "metadata": {"langgraph_node": "hotel"},
+            }
+        )
+    )
+
+    assert [event.type for event in events] == ["tool"]
+
+
 def test_stream_events_from_graph_event_ignores_unknown_events():
     assert list(stream_events_from_graph_event({"event": "not_used"})) == []
 

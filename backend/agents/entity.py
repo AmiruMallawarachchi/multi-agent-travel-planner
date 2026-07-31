@@ -78,8 +78,9 @@ class TripWeaverState(TypedDict):
     active_agent: Optional[str]
     activity: Optional[ActivityState]
 
-    # Missing-input handling (SRS section 4 step 6 / section 7).
-    missing_fields: list[str]
+    # Missing-input handling (SRS section 4 step 6 / section 7). Specialists ask
+    # for missing details inline via their own prompts; this records the question
+    # the dedicated clarify node asked, so the turn's intent is inspectable.
     clarification_question: Optional[str]
 
     # Deterministic, one-question-at-a-time intake. Keeping this in graph
@@ -112,7 +113,6 @@ def new_state(session_id: str, user_message: str) -> dict:
         "intent": None,
         "active_agent": None,
         "activity": None,
-        "missing_fields": [],
         "clarification_question": None,
         "guided_intake": None,
         "hotel_results": [],

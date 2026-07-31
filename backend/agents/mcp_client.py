@@ -95,8 +95,17 @@ def _positive_float_env(name: str, default: float) -> float:
 MCP_HEALTH_TIMEOUT_SECONDS = _positive_float_env(
     "MCP_HEALTH_TIMEOUT_SECONDS", 2.0
 )
+# Free-tier hosts suspend idle services; the first call after idle pays a cold
+# boot of roughly 20-60s. Without an explicit budget we inherit the transport
+# default, time out on a server that was only asleep, and trip the breaker on a
+# service that is actually fine. Cost of being wrong here is one slow first turn.
+MCP_TOOL_TIMEOUT_SECONDS = _positive_float_env("MCP_TOOL_TIMEOUT_SECONDS", 90.0)
+# connect gets the same budget as read on purpose. A suspended free-tier service
+# does not complete the connection until its instance is up, so capping connect
+# at a few seconds made every cold service report "unavailable" while the
+# generous read budget went unused - the exact case the budget exists for.
 HEALTH_TIMEOUT = httpx.Timeout(
-    connect=min(MCP_HEALTH_TIMEOUT_SECONDS, 5.0),
+    connect=MCP_HEALTH_TIMEOUT_SECONDS,
     read=MCP_HEALTH_TIMEOUT_SECONDS,
     write=5.0,
     pool=5.0,
@@ -136,7 +145,12 @@ _breakers: dict[ServerName, _Breaker] = {
 # its explicitly configured server set.
 _client = MultiServerMCPClient(
     {
-        server: {"url": url, "transport": "streamable_http"}
+        server: {
+            "url": url,
+            "transport": "streamable_http",
+            "timeout": MCP_TOOL_TIMEOUT_SECONDS,
+            "sse_read_timeout": MCP_TOOL_TIMEOUT_SECONDS,
+        }
         for server, url in MCP_SERVER_URLS.items()
     }
 )
@@ -189,6 +203,23 @@ async def get_tools_for(server: ServerName) -> list:
         _breakers[server].record_failure()
         logger.warning("MCP tool discovery failed for %s", server)
         return []
+
+
+async def warm_servers() -> None:
+    """Nudge every MCP service awake without blocking or ever raising.
+
+    The backend suspends on the same free tier its MCP services do, so a wake-up
+    is the earliest reliable signal that a traveller is on the way. Probing all
+    six concurrently here means they boot in parallel while the first message is
+    still being typed, instead of serially during that first turn.
+
+    Callers must not await this on the request path - it runs for as long as the
+    slowest cold boot. It belongs in a background task at startup.
+    """
+    try:
+        await get_server_statuses()
+    except Exception:  # noqa: BLE001 - warming is best-effort, never fatal
+        logger.warning("MCP warm-up probe failed")
 
 
 def _health_url(mcp_url: str) -> str:

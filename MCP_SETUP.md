@@ -283,7 +283,20 @@ Blueprint procedure and free-tier limitations.
 
 The Render backend sets `MCP_HEALTH_TIMEOUT_SECONDS=70` so an explicit
 readiness request can wait for sleeping free services. Local development keeps
-the shorter two-second default.
+the shorter two-second default. The budget covers connection setup as well as
+reading: a suspended free service does not accept the connection until its
+instance is up, so a short connect cap would report a merely sleeping service
+as `unavailable`.
+
+`MCP_TOOL_TIMEOUT_SECONDS` (default `90`) is the matching budget for MCP tool
+discovery and invocation. It exists so a cold boot costs one slow first turn
+rather than a failed call that trips the circuit breaker on a healthy service.
+
+Cold starts are also mitigated at startup: the backend suspends on the same free
+tier its MCP services do, so on wake it probes all six concurrently in a
+background task. They boot in parallel while the traveller is still typing. For
+a demo or assessment, request each MCP `/health` a few minutes beforehand to
+remove the first-turn delay entirely.
 
 `TRIPWEAVER_TOOL_MODE=local` is retained only as an explicit local-development
 fallback. It does not prove MCP transport and must not be used for the assessed

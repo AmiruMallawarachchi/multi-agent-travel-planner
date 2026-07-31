@@ -142,7 +142,17 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
         return
 
     if kind == "on_tool_start":
-        yield ToolEvent(status="INVOKED", tool=name or "tool")
+        tool_name = name or "tool"
+        # The node-level status above can only say SEARCHING, because the node
+        # starts before the model has picked a tool. Booking is only knowable
+        # here, at dispatch - same "book" test the specialist uses to set
+        # ActivityState.BOOKING (SRS section 6).
+        if "book" in tool_name:
+            yield StatusEvent(
+                state=ActivityState.BOOKING.value,
+                node=event.get("metadata", {}).get("langgraph_node") or tool_name,
+            )
+        yield ToolEvent(status="INVOKED", tool=tool_name)
         return
 
     if kind == "on_tool_end":
