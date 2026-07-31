@@ -1,4 +1,4 @@
-import { readJsonObject, responseDetail } from "@/lib/http-response"
+import { readJsonObject } from "@/lib/http-response"
 
 /** A chat request the backend actively rejected, carrying a message that is
  * safe and useful to show the traveller. */
@@ -32,7 +32,12 @@ export async function describeFailure(response: Response): Promise<string> {
     STATUS_FALLBACKS.find(([matches]) => matches(response.status))?.[1] ??
     "That request could not be completed. Try again."
 
-  // The backend's own `detail` is written for humans ("Message exceeds 16000
-  // characters"), so prefer it over anything we can infer from the status.
-  return responseDetail(await readJsonObject(response), fallback)
+  const { detail } = await readJsonObject(response)
+
+  // A string `detail` is written for humans ("Message exceeds 6000 characters")
+  // so prefer it. A Pydantic validation array is not - it carries field paths
+  // and echoes the rejected input back, so fall back to the status reason. The
+  // shared responseDetail helper phrases that case as an *account* error, which
+  // is wrong in a chat.
+  return typeof detail === "string" && detail.trim() ? detail : fallback
 }
