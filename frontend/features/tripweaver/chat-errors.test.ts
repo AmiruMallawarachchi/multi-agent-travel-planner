@@ -28,6 +28,24 @@ describe("chat request failures", () => {
     expect(message).not.toMatch(/credential/i)
   })
 
+  it("does not surface a Pydantic validation array or call it an account error", async () => {
+    const message = await describeFailure(
+      jsonResponse(422, {
+        detail: [
+          {
+            type: "string_too_long",
+            loc: ["body", "message"],
+            msg: "String should have at most 6000 characters",
+            input: "aaaa",
+          },
+        ],
+      }),
+    )
+
+    expect(message).not.toMatch(/account|loc|body/i)
+    expect(message).toMatch(/too long|shorter|attachment/i)
+  })
+
   it("separates rate limiting, auth, and backend faults", async () => {
     expect(await describeFailure(new Response("", { status: 429 }))).toMatch(
       /wait|quickly/i,
