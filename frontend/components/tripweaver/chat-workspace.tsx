@@ -454,16 +454,20 @@ export function ChatWorkspace({
         <span className="ml-auto hidden truncate text-xs text-muted-foreground lg:block">
           {runtime.activity}
         </span>
+        {/* The transcript itself must not be a live region: every streamed token
+            mutates it, so a screen reader re-announced the whole conversation on
+            each chunk. Announce the activity instead, which changes once per
+            phase, and let the transcript be an ordinary log.
+
+            This lives inside the header on purpose. The section below is a
+            three-row grid whose last row is the composer, and the whole section
+            clips overflow - so any extra child there risks taking a row and
+            pushing the composer out of sight. The header cannot do that. */}
+        <p className="sr-only" role="status" aria-live="polite">
+          {isStreaming ? runtime.activity : ""}
+        </p>
         <ConversationExport conversation={conversation} />
       </header>
-
-      {/* The transcript itself must not be a live region: every streamed token
-          mutates it, so a screen reader re-announced the whole conversation
-          on each chunk. Announce the activity instead, which changes once per
-          phase, and let the transcript be an ordinary log. */}
-      <p className="sr-only" role="status" aria-live="polite">
-        {isStreaming ? runtime.activity : ""}
-      </p>
 
       <div
         ref={messagesRef}
