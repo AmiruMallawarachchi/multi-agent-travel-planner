@@ -355,6 +355,61 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run build
 ```
 
+## UX Acceptance And Screenshot Checklist
+
+The current workspace is intentionally quiet when a new chat opens. It shows
+only `Hello`; travel suggestions appear after the traveller expresses a travel
+intent. The right rail keeps the tools visible, but the Trip Context section is
+hidden until the conversation contains useful trip details.
+
+Use a fresh browser session or click **New chat** before each visual check.
+Capture the full browser viewport and name screenshots using the IDs below.
+These screenshots are evidence of the UI state, while live provider results can
+change with time, quota, and availability.
+
+| ID | Prompt or action | Expected result | Screenshot |
+| --- | --- | --- | --- |
+| UX-01 | Open a new chat | Only `Hello` appears. No Flights, Hotels, Itinerary, or Something else buttons appear. | `ux-01-quiet-welcome.png` |
+| UX-02 | `I want to travel to Japan for 7 days in October.` | The answer completes, then contextual buttons appear: Find flights, Find hotels, Plan activities, and Check weather. | `ux-02-travel-followups.png` |
+| UX-03 | `Hello` | The assistant responds naturally without displaying travel category buttons. | `ux-03-greeting.png` |
+| UX-04 | `Plan a 5 day trip to Tokyo for 2 people with a budget of $2000.` | Trip Context appears with only known values, arranged as compact cards. No repeated Not provided rows appear. | `ux-04-context-cards.png` |
+| UX-05 | `Search flights from CMB to NRT on 2026-10-12 returning 2026-10-19.` | Flight results appear as separate readable cards with route, time, airline, and price. | `ux-05-flight-cards.png` |
+| UX-06 | `Find hotels in Tokyo for 2 adults from 2026-10-12 to 2026-10-19.` | Hotel results appear as separate cards with name, rating, reviews, and nightly price. | `ux-06-hotel-cards.png` |
+| UX-07 | `What is the weather in Tokyo next week?` | Weather appears as a current condition card plus a compact multi-day forecast grid. | `ux-07-weather-card.png` |
+| UX-08 | `Plan a 3 day itinerary for Kyoto with culture and food.` | The itinerary result and View full itinerary dialog show structured day sections and activity timeline items. | `ux-08-itinerary-days.png` |
+| UX-09 | `Convert 500 USD to EUR.` | Currency result shows the rate, date, source, and converted amount. | `ux-09-currency-card.png` |
+| UX-10 | `Find budget friendly places to visit in Dubai for shopping.` | Location results show numbered place cards and safe map links where available. | `ux-10-location-cards.png` |
+| UX-11 | Stop or disable one MCP service, then refresh health | The affected service says unavailable and explains that general questions and other available services still work. | `ux-11-mcp-degraded.png` |
+| UX-12 | Temporarily make the account backend unavailable and open Sign in | The error explains that guest planning remains available and suggests trying again shortly. | `ux-12-account-recovery.png` |
+| UX-13 | Switch SOL/LUNA, collapse tools, resize to mobile | The compact context and result cards remain readable in both themes and mobile layout. | `ux-13-responsive-themes.png` |
+
+### Full system prompt set
+
+Run these prompts in order when documenting the complete product. Record the
+route, visible specialist, tool status, structured result, and any limitation
+for each one.
+
+```text
+Hello
+I want to travel to Japan for 7 days in October.
+Search flights from CMB to NRT on 2026-10-12 returning 2026-10-19.
+Find hotels in Tokyo for 2 adults from 2026-10-12 to 2026-10-19.
+Plan a 3 day itinerary for Kyoto with culture and food.
+What is the weather in Tokyo next week?
+Convert 500 USD to EUR.
+Find budget friendly places to visit in Dubai for shopping.
+I'm thinking to travel in Singapore for one week. I don't know how much money I need.
+Tell me about Singapore Zoo.
+Book the hotel option for Alex Traveller.
+Book the flight option for Alex Traveller.
+What can I do in Japan if it rains?
+```
+
+For booking prompts, verify that the response clearly says the confirmation is
+simulated. For provider failures, verify that the UI preserves the conversation
+and gives a retryable, user-safe explanation without exposing URLs, stack traces,
+or credentials.
+
 ## Demo Test Script
 
 Use these exact checks before presenting the project.

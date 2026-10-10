@@ -83,12 +83,12 @@ function ResultHeading({ result }: { result: StructuredResult }) {
 function FlightPreview({ data }: { data: unknown }) {
   const options = records(data).slice(0, 3)
   return (
-    <div className="divide-y divide-border/60">
+    <div className="mt-2 space-y-2">
       {options.map((option, index) => {
         const departure = record(option.departure)
         const arrival = record(option.arrival)
         return (
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2" key={`${text(option.flight_number)}-${index}`}>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-border/50 bg-background/30 p-2.5" key={`${text(option.flight_number)}-${index}`}>
             <div className="min-w-0">
               <p className="truncate text-xs font-medium">
                 {text(option.airline)} {text(option.flight_number, "")}
@@ -111,9 +111,9 @@ function FlightPreview({ data }: { data: unknown }) {
 function HotelPreview({ data }: { data: unknown }) {
   const options = records(data).slice(0, 3)
   return (
-    <div className="divide-y divide-border/60">
+    <div className="mt-2 space-y-2">
       {options.map((option, index) => (
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2" key={`${text(option.name)}-${index}`}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-border/50 bg-background/30 p-2.5" key={`${text(option.name)}-${index}`}>
           <div className="min-w-0">
             <p className="truncate text-xs font-medium">{text(option.name)}</p>
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -136,22 +136,22 @@ function HotelPreview({ data }: { data: unknown }) {
 function ItineraryPreview({ data }: { data: unknown }) {
   const itinerary = record(data)
   return (
-    <dl className="grid grid-cols-2 gap-x-5 gap-y-2 py-2 text-xs sm:grid-cols-4">
+    <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
       <div>
         <dt className="text-[10px] uppercase text-muted-foreground">Destination</dt>
-        <dd className="truncate font-medium">{text(itinerary?.destination)}</dd>
+        <dd className="mt-0.5 truncate font-medium">{text(itinerary?.destination)}</dd>
       </div>
       <div>
         <dt className="text-[10px] uppercase text-muted-foreground">Duration</dt>
-        <dd className="font-medium">{displayNumber(itinerary?.duration_days)} days</dd>
+        <dd className="mt-0.5 font-medium">{displayNumber(itinerary?.duration_days)} days</dd>
       </div>
       <div>
         <dt className="text-[10px] uppercase text-muted-foreground">Travellers</dt>
-        <dd className="font-medium">{displayNumber(itinerary?.travelers)}</dd>
+        <dd className="mt-0.5 font-medium">{displayNumber(itinerary?.travelers)}</dd>
       </div>
       <div>
         <dt className="text-[10px] uppercase text-muted-foreground">Pace</dt>
-        <dd className="capitalize font-medium">{text(itinerary?.pace)}</dd>
+        <dd className="mt-0.5 capitalize font-medium">{text(itinerary?.pace)}</dd>
       </div>
     </dl>
   )
@@ -165,7 +165,7 @@ function WeatherPreview({ data }: { data: unknown }) {
   const daily = records(weather?.daily).slice(0, 3)
 
   return (
-    <div className="py-2">
+    <div className="mt-2 rounded-lg border border-border/50 bg-background/30 p-2.5">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium">
@@ -180,9 +180,9 @@ function WeatherPreview({ data }: { data: unknown }) {
         ) : null}
       </div>
       {daily.length ? (
-        <div className="glass-divider mt-2 grid grid-cols-3 divide-x divide-border/60 border-t pt-2 text-center text-xs">
+        <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-xs">
           {daily.map((day) => (
-            <div className="min-w-0 px-2" key={text(day.date)}>
+            <div className="min-w-0 rounded-md bg-background/40 px-2 py-2" key={text(day.date)}>
               <p className="truncate font-medium">{text(day.date)}</p>
               <p className="truncate text-muted-foreground">{text(day.weather)}</p>
               <p>{displayNumber(day.temperature_max)} / {displayNumber(day.temperature_min)}</p>

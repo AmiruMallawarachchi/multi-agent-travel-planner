@@ -418,7 +418,7 @@ export function TripWeaverApp() {
       throw new Error(
         typeof body.detail === "string"
           ? body.detail
-          : "The account service is temporarily unavailable. Please try again.",
+          : "We could not reach your account service. Your trip planning is still available as a guest; try signing in again in a moment.",
       )
     }
     setAccount(user)

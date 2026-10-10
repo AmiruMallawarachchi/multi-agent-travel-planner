@@ -26,10 +26,8 @@ describe("conversation helpers", () => {
       "Maya Perera",
     )
 
-    expect(conversation.messages[0]).toMatchObject({
-      content: "Hello",
-      quickReplies: undefined,
-    })
+    expect(conversation.messages[0].content).toBe("Hello")
+    expect(conversation.messages[0].quickReplies).toBeUndefined()
   })
 
   it("derives a concise title from the first request", () => {

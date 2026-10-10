@@ -21,6 +21,7 @@ export function createConversation(
   travellerName?: string,
 ): Conversation {
   const timestamp = now.toISOString()
+  void travellerName
 
   return {
     id,
