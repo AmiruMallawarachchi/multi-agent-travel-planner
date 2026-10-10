@@ -43,7 +43,10 @@ describe("GET /api/health", () => {
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:8000/health",
-      expect.objectContaining({ cache: "no-store" }),
+      expect.objectContaining({
+        cache: "no-store",
+        signal: expect.any(AbortSignal),
+      }),
     )
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:8000/health/live",
