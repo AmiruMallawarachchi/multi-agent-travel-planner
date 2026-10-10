@@ -294,7 +294,8 @@ typed frontend data.
 
 ### Secrets
 
-- `OPENAI_API_KEY` exists only in the backend environment.
+- `GROQ_API_KEY` or `OPENAI_API_KEY` exists only in the backend environment,
+  depending on `LLM_PROVIDER`.
 - `SERPAPI_API_KEY` exists only in hotel, flight, and location MCP environments.
 - `TRIPWEAVER_API_KEYS` exists only in the backend.
 - A matching `BACKEND_API_KEY` exists only in the Next.js server environment.
@@ -342,7 +343,7 @@ See [SECURITY.md](./SECURITY.md) for the threat model and deployment checklist.
   when a stream ends with an error.
 
 An `available` health status means a process answered `/health`; it does not
-guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
+guarantee LLM quota, SerpApi quota, credentials, or external provider uptime.
 
 ## 10. Environment contract
 
@@ -350,7 +351,10 @@ guarantee OpenAI quota, SerpApi quota, credentials, or external provider uptime.
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | OpenAI authentication |
+| `LLM_PROVIDER` | `openai` or `groq` |
+| `OPENAI_API_KEY` | OpenAI authentication when `LLM_PROVIDER=openai` |
+| `GROQ_API_KEY` | Groq authentication when `LLM_PROVIDER=groq` |
+| `LLM_BASE_URL` | Optional OpenAI-compatible API endpoint override |
 | `ROUTER_MODEL`, `AGENT_MODEL` | Model selection |
 | `HOTEL_MCP_URL` | Hotel MCP `/mcp` URL |
 | `FLIGHT_MCP_URL` | Flight MCP `/mcp` URL |

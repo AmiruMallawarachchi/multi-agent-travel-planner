@@ -108,10 +108,14 @@ services:
         value: "1"
       - key: PYTHONDONTWRITEBYTECODE
         value: "1"
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
       - key: ROUTER_MODEL
-        value: gpt-4o-mini
+        value: llama-3.3-70b-versatile
       - key: AGENT_MODEL
-        value: gpt-4o-mini
+        value: llama-3.3-70b-versatile
       - key: RATE_LIMIT_REQUESTS
         value: "20"
       - key: RATE_LIMIT_WINDOW_SECONDS
@@ -154,7 +158,7 @@ services:
           type: web
           name: tripweaver-place-search-mcp
           envVarKey: RENDER_EXTERNAL_HOSTNAME
-      - key: OPENAI_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: TRIPWEAVER_API_KEYS
         sync: false
