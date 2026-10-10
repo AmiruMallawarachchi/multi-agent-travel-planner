@@ -200,12 +200,14 @@ DEPLOYMENT.md             single-VM production deployment guide
 ### Render backend
 
 ```text
-OPENAI_API_KEY=...
+LLM_PROVIDER=groq
+GROQ_API_KEY=...
+LLM_BASE_URL=https://api.groq.com/openai/v1
 DATABASE_URL=postgresql://...
 TRIPWEAVER_API_KEYS=one-long-random-secret
 ALLOWED_ORIGINS=https://multi-agent-travel-planner-jet.vercel.app,http://localhost:3000
 TRIPWEAVER_TOOL_MODE=mcp
-MCP_HEALTH_TIMEOUT_SECONDS=70
+MCP_HEALTH_TIMEOUT_SECONDS=5
 HOTEL_MCP_HOST=tripweaver-hotel-search-mcp.onrender.com
 FLIGHT_MCP_HOST=tripweaver-flight-search-mcp.onrender.com
 ITINERARY_MCP_HOST=tripweaver-itinerary-mcp.onrender.com
@@ -214,8 +216,8 @@ CURRENCY_MCP_HOST=tripweaver-currency-mcp.onrender.com
 LOCATION_MCP_HOST=tripweaver-place-search-mcp.onrender.com
 SUPABASE_URL=https://zkxzsnudgzsdqlvvinbi.supabase.co
 SUPABASE_PUBLISHABLE_KEY=...
-ROUTER_MODEL=gpt-4o-mini
-AGENT_MODEL=gpt-4o-mini
+ROUTER_MODEL=llama-3.3-70b-versatile
+AGENT_MODEL=llama-3.3-70b-versatile
 RATE_LIMIT_REQUESTS=20
 RATE_LIMIT_WINDOW_SECONDS=60
 MAX_MESSAGE_LENGTH=2000
