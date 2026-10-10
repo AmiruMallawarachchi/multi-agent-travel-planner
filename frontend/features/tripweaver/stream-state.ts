@@ -293,6 +293,32 @@ export function applyStreamEvent(
     }
     runtime = { ...runtime, activity: "Request failed" }
   } else if (event.type === "done") {
+    const userMessages = conversation.messages.filter((message) => message.role === "user")
+    const firstRequest = userMessages[0]?.content.toLocaleLowerCase() ?? ""
+    const mentionsTravel = /\b(travel|trip|holiday|vacation|visit|fly|flight|hotel|itinerary|destination|go to)\b/.test(
+      firstRequest,
+    )
+    if (userMessages.length === 1 && mentionsTravel) {
+      conversation = {
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === assistantMessageId && !message.quickReplies
+            ? {
+                ...message,
+                quickReplies: {
+                  options: [
+                    { id: "suggest-flights", label: "Find flights", value: "Help me find flights." },
+                    { id: "suggest-hotels", label: "Find hotels", value: "Help me find hotels." },
+                    { id: "suggest-itinerary", label: "Plan activities", value: "Help me plan activities and an itinerary." },
+                    { id: "suggest-weather", label: "Check weather", value: "What is the weather like there?" },
+                  ],
+                  allowCustomAnswer: true,
+                },
+              }
+            : message,
+        ),
+      }
+    }
     runtime = { ...runtime, activity: "Ready", activeAgent: "TripWeaver router" }
   }
 

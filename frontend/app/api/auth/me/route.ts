@@ -28,7 +28,12 @@ export async function GET() {
   const body = await readJsonObject(response)
   if (!response.ok) {
     return NextResponse.json(
-      { detail: responseDetail(body, "The account service is temporarily unavailable") },
+      {
+        detail: responseDetail(
+          body,
+          "Your account could not be checked right now. You can continue planning as a guest and try again shortly.",
+        ),
+      },
       { status: response.status },
     )
   }
