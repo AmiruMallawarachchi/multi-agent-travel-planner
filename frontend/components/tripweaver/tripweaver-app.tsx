@@ -306,26 +306,34 @@ export function TripWeaverApp() {
     const controller = new AbortController()
 
     async function checkBackend() {
-      try {
-        const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
-        const health = (await response.json()) as {
-          backend?: string
-          online?: boolean
-          mcp_servers?: McpServerStatuses
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
+          const health = (await response.json()) as {
+            backend?: string
+            online?: boolean
+            mcp_servers?: McpServerStatuses
+          }
+          const online = response.ok && health.online === true && health.backend === "online"
+          if (online) {
+            setState((current) => ({
+              ...current,
+              runtime: setBackendAvailability(current.runtime, true, health.mcp_servers ?? {}),
+            }))
+            return
+          }
+        } catch {
+          if (controller.signal.aborted) return
         }
-        const online = response.ok && health.online === true && health.backend === "online"
-        setState((current) => ({
-          ...current,
-          runtime: setBackendAvailability(current.runtime, online, health.mcp_servers ?? {}),
-        }))
-      } catch {
-        if (!controller.signal.aborted) {
-          setState((current) => ({
-            ...current,
-            runtime: setBackendAvailability(current.runtime, false),
-          }))
+
+        if (attempt < 2) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
         }
       }
+
+      // A single failed probe should not make a running Render instance look
+      // offline while it wakes from a free-tier cold start. Keep the last
+      // known state and let the next interval probe recover it.
     }
 
     void checkBackend()
