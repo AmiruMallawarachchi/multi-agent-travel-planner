@@ -253,3 +253,11 @@ def test_user_safe_error_does_not_leak_internal_exception_details():
     event = user_safe_error()
     assert "Something went wrong" in event.message
     assert "Traceback" not in event.message
+
+
+def test_user_safe_error_explains_model_quota_exhaustion():
+    event = user_safe_error(RuntimeError("Error code: 429 insufficient_quota"))
+
+    assert "AI provider quota" in event.message
+    assert "OpenAI" in event.message
+    assert "insufficient_quota" not in event.message
