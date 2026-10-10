@@ -140,6 +140,9 @@ class _Breaker:
 _breakers: dict[ServerName, _Breaker] = {
     server: _Breaker() for server in MCP_SERVER_URLS
 }
+_cached_server_statuses: dict[ServerName, ServerStatus] = {
+    server: "unavailable" for server in MCP_SERVER_URLS
+}
 
 # One client owns the service registry while each specialist still loads only
 # its explicitly configured server set.
@@ -258,10 +261,19 @@ async def get_server_statuses() -> dict[ServerName, ServerStatus]:
             ),
             return_exceptions=True,
         )
-    return {
+    statuses = {
         server: cast(
             ServerStatus,
             "available" if result is True else "unavailable",
         )
         for server, result in zip(servers, probes, strict=True)
     }
+    _cached_server_statuses.update(statuses)
+    return statuses
+
+
+def cached_server_statuses() -> dict[ServerName, ServerStatus]:
+    """Return the latest probe without making health requests wait on cold starts."""
+    if using_local_tools():
+        return {server: "available" for server in MCP_SERVER_URLS}
+    return dict(_cached_server_statuses)
