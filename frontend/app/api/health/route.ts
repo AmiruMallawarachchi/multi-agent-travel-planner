@@ -1,4 +1,6 @@
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:8000").replace(/\/$/, "")
+const READINESS_TIMEOUT_MS = 30_000
+const LIVENESS_TIMEOUT_MS = 5_000
 
 const MCP_SERVERS = new Set([
   "flight-mcp",
@@ -24,11 +26,11 @@ export async function GET() {
   const [readinessResult, livenessResult] = await Promise.allSettled([
     fetch(`${BACKEND_URL}/health`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
     }),
     fetch(`${BACKEND_URL}/health/live`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(LIVENESS_TIMEOUT_MS),
     }),
   ])
 
