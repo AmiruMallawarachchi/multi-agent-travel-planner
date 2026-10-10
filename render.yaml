@@ -121,7 +121,7 @@ services:
       - key: TRIPWEAVER_TOOL_MODE
         value: mcp
       - key: MCP_HEALTH_TIMEOUT_SECONDS
-        value: "70"
+        value: "5"
       - key: MCP_TOOL_TIMEOUT_SECONDS
         value: "90"
       - key: HOTEL_MCP_HOST

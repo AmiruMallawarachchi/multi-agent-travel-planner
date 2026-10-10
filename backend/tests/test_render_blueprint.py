@@ -49,7 +49,7 @@ def test_backend_hosts_reference_blueprint_managed_provider_services():
             "envVarKey": "RENDER_EXTERNAL_HOSTNAME",
         }
 
-    assert backend_env["MCP_HEALTH_TIMEOUT_SECONDS"]["value"] == "70"
+    assert backend_env["MCP_HEALTH_TIMEOUT_SECONDS"]["value"] == "5"
 
 
 def test_serpapi_secret_is_owned_by_hotel_and_shared_with_provider_services():

@@ -281,12 +281,11 @@ proof requires `tool_runtime.mode` to be `mcp`, transport to be
 `configured_servers` to be `6`. See `BOOTCAMP_DEPLOYMENT.md` for the complete
 Blueprint procedure and free-tier limitations.
 
-The Render backend sets `MCP_HEALTH_TIMEOUT_SECONDS=70` so an explicit
-readiness request can wait for sleeping free services. Local development keeps
-the shorter two-second default. The budget covers connection setup as well as
-reading: a suspended free service does not accept the connection until its
-instance is up, so a short connect cap would report a merely sleeping service
-as `unavailable`.
+The Render backend sets `MCP_HEALTH_TIMEOUT_SECONDS=5` so readiness remains
+bounded for the Vercel health proxy. Local development keeps the shorter
+two-second default. Sleeping Render services may be reported as unavailable on
+the first probe; the backend warms them in the background and the frontend
+rechecks readiness every 15 seconds.
 
 `MCP_TOOL_TIMEOUT_SECONDS` (default `90`) is the matching budget for MCP tool
 discovery and invocation. It exists so a cold boot costs one slow first turn
