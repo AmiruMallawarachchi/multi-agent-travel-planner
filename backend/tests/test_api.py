@@ -81,6 +81,18 @@ class TestApiSecurity:
         monkeypatch.setattr(routes, "get_server_statuses", statuses)
         monkeypatch.setattr(
             routes,
+            "cached_server_statuses",
+            lambda: {
+                "hotel-mcp": "available",
+                "flight-mcp": "available",
+                "itinerary-mcp": "available",
+                "weather-mcp": "unavailable",
+                "currency-mcp": "available",
+                "location-mcp": "unavailable",
+            },
+        )
+        monkeypatch.setattr(
+            routes,
             "tool_runtime_info",
             lambda: {
                 "mode": "mcp",
