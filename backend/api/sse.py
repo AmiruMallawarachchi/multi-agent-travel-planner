@@ -203,7 +203,15 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
             yield quick_replies
 
 
-def user_safe_error() -> ErrorEvent:
+def user_safe_error(error: Exception | None = None) -> ErrorEvent:
+    detail = str(error or "").casefold()
+    if "insufficient_quota" in detail or "exceeded your current quota" in detail:
+        return ErrorEvent(
+            message=(
+                "TripWeaver's AI provider quota is unavailable right now. "
+                "Check the OpenAI project billing and usage limits, then try again."
+            )
+        )
     return ErrorEvent(
         message=(
             "Something went wrong on our side. The rest of TripWeaver is "

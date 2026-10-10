@@ -288,11 +288,11 @@ async def chat_stream(
             )
             yield encode_sse(done_event())
 
-        except Exception:  # noqa: BLE001 - conversation failures become user-safe SSE events
+        except Exception as exc:  # noqa: BLE001 - conversation failures become user-safe SSE events
             logger.exception(
                 "request_id=%s session=%s chat_stream failed", request_id, session_id
             )
-            yield encode_sse(user_safe_error())
+            yield encode_sse(user_safe_error(exc))
             yield encode_sse(done_event())
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
