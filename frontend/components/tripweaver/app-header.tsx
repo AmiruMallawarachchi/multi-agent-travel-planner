@@ -29,7 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 interface AppHeaderProps {
   account: AccountUser | null
-  backendOnline: boolean
+  backendStatus: "waking" | "online" | "offline"
   onOpenAuth: (mode: AuthMode) => void
   onOpenHelp: () => void
   historyOpen: boolean
@@ -52,7 +52,7 @@ function initials(account: AccountUser | null) {
 
 export function AppHeader({
   account,
-  backendOnline,
+  backendStatus,
   historyOpen,
   toolsOpen,
   onOpenAuth,
@@ -87,10 +87,10 @@ export function AppHeader({
           className="glass-control h-7 rounded-full px-2.5 font-normal text-muted-foreground"
         >
           <span
-            className={`size-1.5 rounded-full ${backendOnline ? "bg-emerald-600" : "bg-rose-500"}`}
+            className={`size-1.5 rounded-full ${backendStatus === "online" ? "bg-emerald-600" : backendStatus === "waking" ? "animate-pulse bg-amber-500" : "bg-rose-500"}`}
             aria-hidden="true"
           />
-          {backendOnline ? "Backend online" : "Backend offline"}
+          {backendStatus === "online" ? "Backend online" : backendStatus === "waking" ? "Waking travel services" : "Backend offline"}
         </Badge>
       </div>
 

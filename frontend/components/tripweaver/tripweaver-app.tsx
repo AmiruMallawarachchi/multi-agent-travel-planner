@@ -162,6 +162,7 @@ export function TripWeaverApp() {
   const [settings, setSettings] = useState<TripWeaverSettings>(DEFAULT_SETTINGS)
   const [query, setQuery] = useState("")
   const [input, setInput] = useState("")
+  const [backendStatus, setBackendStatus] = useState<"waking" | "online" | "offline">("waking")
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -316,6 +317,7 @@ export function TripWeaverApp() {
           }
           const online = response.ok && health.online === true && health.backend === "online"
           if (online) {
+            setBackendStatus("online")
             setState((current) => ({
               ...current,
               runtime: setBackendAvailability(current.runtime, true, health.mcp_servers ?? {}),
@@ -331,15 +333,20 @@ export function TripWeaverApp() {
         }
       }
 
-      // A single failed probe should not make a running Render instance look
-      // offline while it wakes from a free-tier cold start. Keep the last
-      // known state and let the next interval probe recover it.
     }
 
     void checkBackend()
-    const healthInterval = window.setInterval(() => void checkBackend(), 15_000)
+    const healthInterval = window.setInterval(() => void checkBackend(), 5_000)
+    const offlineTimeout = window.setTimeout(() => {
+      setBackendStatus((current) => {
+        if (current === "online") return current
+        setState((state) => ({ ...state, runtime: setBackendAvailability(state.runtime, false) }))
+        return "offline"
+      })
+    }, 90_000)
     return () => {
       window.clearInterval(healthInterval)
+      window.clearTimeout(offlineTimeout)
       controller.abort()
     }
   }, [])
@@ -842,7 +849,7 @@ export function TripWeaverApp() {
   )
 
   const statusPanel = (
-    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} />
+    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} backendStatus={backendStatus} />
   )
 
   return (
@@ -850,7 +857,7 @@ export function TripWeaverApp() {
       <div className="grid h-full w-full grid-rows-[56px_minmax(0,1fr)] gap-1.5 overflow-hidden p-1.5 sm:grid-rows-[58px_minmax(0,1fr)] sm:gap-2 sm:p-2">
         <AppHeader
           account={account}
-          backendOnline={state.runtime.backendOnline}
+          backendStatus={backendStatus}
           historyOpen={desktopHistoryOpen || historyOpen}
           toolsOpen={desktopToolsOpen || statusOpen}
           onOpenAuth={setAuthMode}

@@ -21,7 +21,7 @@ The system supports account-scoped chat history, plan folders, live tool status,
 | Supabase project | https://zkxzsnudgzsdqlvvinbi.supabase.co |
 | Repository | https://github.com/AmiruMallawarachchi/multi-agent-travel-planner |
 
-Demo note: Render Free can sleep after inactivity. If the first request is slow or auth briefly appears unavailable, open the backend health URL once and retry after the service wakes. Render uses the lightweight `/health/live` endpoint for liveness; `/health` intentionally performs the slower MCP and account-storage readiness checks.
+Demo note: Render Free can sleep after inactivity. On a fresh visit, the frontend shows “Waking the travel services (about 60 seconds on first visit)” and retries the health check every five seconds for up to 90 seconds. If the service still cannot be reached, it then reports that the backend is offline. For a smoother live demo, open the backend health URL a few minutes before sharing the app; do not keep free services warm continuously.
 
 ## Release Evidence
 
@@ -160,7 +160,7 @@ TripWeaver does not expose database credentials, backend API keys, or account to
 | Weather | `weather` agent, weather tools | Open-Meteo |
 | Currency | `currency` agent, currency tools | Frankfurter |
 | Location/places | `location` agent, location tools | Open-Meteo + SerpApi Google Maps |
-| General travel help | `general_qa` agent | OpenAI model only |
+| General travel help | `general_qa` agent | Configured LLM provider (Groq by default; OpenAI-compatible) |
 
 Booking actions are simulated by design. TripWeaver never purchases, books, pays for, cancels, or changes real travel.
 

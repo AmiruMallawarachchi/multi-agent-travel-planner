@@ -73,10 +73,11 @@ function ServiceRow({ service }: { service: ServiceState }) {
 interface StatusPanelProps {
   runtime: RuntimeState
   tripContext: TripContext
+  backendStatus: "waking" | "online" | "offline"
   className?: string
 }
 
-export function StatusPanel({ runtime, tripContext, className }: StatusPanelProps) {
+export function StatusPanel({ runtime, tripContext, backendStatus, className }: StatusPanelProps) {
   const contextItems = [
     ["Destination", tripContext.destination],
     ["Dates", tripContext.dates],
@@ -84,7 +85,7 @@ export function StatusPanel({ runtime, tripContext, className }: StatusPanelProp
     ["Budget", tripContext.budget],
     ["Preferences", tripContext.preferences.join(", ")],
   ].filter(([, value]) => Boolean(value))
-  const hasUnavailableService = Object.values(runtime.services).some(
+  const hasUnavailableService = backendStatus !== "waking" && Object.values(runtime.services).some(
     ({ status }) => status === "unavailable" || status === "offline",
   )
 
@@ -105,9 +106,18 @@ export function StatusPanel({ runtime, tripContext, className }: StatusPanelProp
         </div>
         <div className="glass-divider border-t pt-2">
           {Object.values(runtime.services).map((service) => (
-            <ServiceRow service={service} key={service.key} />
+            <ServiceRow service={backendStatus === "waking" ? { ...service, status: "running" } : service} key={service.key} />
           ))}
         </div>
+        {backendStatus === "waking" ? (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+            <div className="flex items-center gap-2 font-medium">
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+              Waking the travel services
+            </div>
+            <p className="mt-1">About 60 seconds on the first visit. This page will retry automatically.</p>
+          </div>
+        ) : null}
         {hasUnavailableService ? (
           <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
             Some live travel data is temporarily unavailable. You can still ask general questions and use the other services marked available.
