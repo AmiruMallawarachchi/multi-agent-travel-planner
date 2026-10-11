@@ -233,3 +233,24 @@ async def test_booking_remains_explicitly_simulated():
     assert confirmation["offer_id"] == "property-token"
     assert confirmation["guest_name"] == "Asha Perera"
     assert confirmation["simulated"] is True
+
+
+@pytest.mark.asyncio
+async def test_booking_accepts_a_long_provider_token():
+    """property_token is short today, but the flight service shipped a token
+    past the old 200-character cap and rejected every booking. Pin the bound
+    well clear of provider-controlled lengths."""
+    long_token = "P" * 400
+
+    confirmation = await hotel_client.book_hotel_offer(long_token, "Asha Perera")
+
+    assert confirmation["offer_id"] == long_token
+    assert confirmation["simulated"] is True
+
+
+@pytest.mark.asyncio
+async def test_booking_still_refuses_an_absurd_offer_id():
+    with pytest.raises(hotel_client.InvalidInputError):
+        await hotel_client.book_hotel_offer(
+            "P" * (hotel_client.MAX_OFFER_ID_LENGTH + 1), "Asha Perera"
+        )

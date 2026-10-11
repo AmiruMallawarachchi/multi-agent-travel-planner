@@ -69,6 +69,9 @@ export interface ChatMessage {
   tools?: ToolActivity[]
   results?: StructuredResult[]
   quickReplies?: QuickReplies
+  /** Set when the turn ended in an error, so a partial answer is not mistaken
+   * for a complete one and the traveller is offered a retry. */
+  failed?: boolean
 }
 
 export interface TripContext {

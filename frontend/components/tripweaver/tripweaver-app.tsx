@@ -47,6 +47,8 @@ import type {
   PlanFolder,
   TripWeaverSettings,
 } from "@/features/tripweaver/types"
+import { ChatRequestError, describeFailure } from "@/features/tripweaver/chat-errors"
+import { composeRequest } from "@/features/tripweaver/compose-request"
 import { parseSseChunk, type StreamEvent } from "@/lib/sse"
 import { cn } from "@/lib/utils"
 import { readJsonObject } from "@/lib/http-response"
@@ -160,6 +162,7 @@ export function TripWeaverApp() {
   const [settings, setSettings] = useState<TripWeaverSettings>(DEFAULT_SETTINGS)
   const [query, setQuery] = useState("")
   const [input, setInput] = useState("")
+  const [backendStatus, setBackendStatus] = useState<"waking" | "online" | "offline">("waking")
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -304,32 +307,46 @@ export function TripWeaverApp() {
     const controller = new AbortController()
 
     async function checkBackend() {
-      try {
-        const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
-        const health = (await response.json()) as {
-          backend?: string
-          online?: boolean
-          mcp_servers?: McpServerStatuses
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
+          const health = (await response.json()) as {
+            backend?: string
+            online?: boolean
+            mcp_servers?: McpServerStatuses
+          }
+          const online = response.ok && health.online === true && health.backend === "online"
+          if (online) {
+            setBackendStatus("online")
+            setState((current) => ({
+              ...current,
+              runtime: setBackendAvailability(current.runtime, true, health.mcp_servers ?? {}),
+            }))
+            return
+          }
+        } catch {
+          if (controller.signal.aborted) return
         }
-        const online = response.ok && health.online === true && health.backend === "online"
-        setState((current) => ({
-          ...current,
-          runtime: setBackendAvailability(current.runtime, online, health.mcp_servers ?? {}),
-        }))
-      } catch {
-        if (!controller.signal.aborted) {
-          setState((current) => ({
-            ...current,
-            runtime: setBackendAvailability(current.runtime, false),
-          }))
+
+        if (attempt < 2) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
         }
       }
+
     }
 
     void checkBackend()
-    const healthInterval = window.setInterval(() => void checkBackend(), 15_000)
+    const healthInterval = window.setInterval(() => void checkBackend(), 5_000)
+    const offlineTimeout = window.setTimeout(() => {
+      setBackendStatus((current) => {
+        if (current === "online") return current
+        setState((state) => ({ ...state, runtime: setBackendAvailability(state.runtime, false) }))
+        return "offline"
+      })
+    }, 90_000)
     return () => {
       window.clearInterval(healthInterval)
+      window.clearTimeout(offlineTimeout)
       controller.abort()
     }
   }, [])
@@ -416,7 +433,7 @@ export function TripWeaverApp() {
       throw new Error(
         typeof body.detail === "string"
           ? body.detail
-          : "The account service is temporarily unavailable. Please try again.",
+          : "We could not reach your account service. Your trip planning is still available as a guest; try signing in again in a moment.",
       )
     }
     setAccount(user)
@@ -538,13 +555,12 @@ export function TripWeaverApp() {
       tools: [],
       results: [],
     }
-    const requestMessage = [
-      content,
-      ...attachments.map(
-        (attachment) =>
-          `<attachment name="${attachment.name}">\n${attachment.content.slice(0, 15_000)}\n</attachment>`,
-      ),
-    ].join("\n\n")
+    const { message: requestMessage, trimmed } = composeRequest(content, attachments)
+    if (trimmed.length > 0) {
+      toast.info(
+        `Only the first part of ${trimmed.join(", ")} was sent - TripWeaver keeps each message short.`,
+      )
+    }
 
     setState((current) => ({
       ...current,
@@ -580,7 +596,7 @@ export function TripWeaverApp() {
       })
 
       if (!response.ok || !response.body) {
-        throw new Error(`Chat request failed with ${response.status}`)
+        throw new ChatRequestError(await describeFailure(response))
       }
 
       const reader = response.body.getReader()
@@ -604,17 +620,35 @@ export function TripWeaverApp() {
         })
         applyEvent(conversationId, assistantMessageId, { type: "done" })
       } else {
-        applyEvent(conversationId, assistantMessageId, {
-          type: "error",
-          message:
-            "I could not complete that request. Check that the TripWeaver backend and API credentials are available, then try again.",
-        })
-        toast.error("TripWeaver could not complete the request")
+        const message =
+          error instanceof ChatRequestError
+            ? error.message
+            : "I could not reach TripWeaver. Check your connection and try again."
+        applyEvent(conversationId, assistantMessageId, { type: "error", message })
+        toast.error(message)
       }
     } finally {
       setIsStreaming(false)
       abortRef.current = null
     }
+  }
+
+  /** Resend the request that produced a failed answer, as a fresh turn.
+   * Re-running the same prompt is what the traveller wants after a transient
+   * MCP failure, and it beats making them retype it. */
+  function retryMessage(assistantMessageId: string) {
+    if (isStreaming || !activeConversation) return
+
+    const messages = activeConversation.messages
+    const failedIndex = messages.findIndex(({ id }) => id === assistantMessageId)
+    if (failedIndex < 0) return
+
+    const original = messages
+      .slice(0, failedIndex)
+      .findLast(({ role }) => role === "user")
+    if (!original?.content) return
+
+    void sendMessage(original.content)
   }
 
   function startVoiceInput() {
@@ -815,7 +849,7 @@ export function TripWeaverApp() {
   )
 
   const statusPanel = (
-    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} />
+    <StatusPanel runtime={state.runtime} tripContext={activeConversation.tripContext} backendStatus={backendStatus} />
   )
 
   return (
@@ -823,7 +857,7 @@ export function TripWeaverApp() {
       <div className="grid h-full w-full grid-rows-[56px_minmax(0,1fr)] gap-1.5 overflow-hidden p-1.5 sm:grid-rows-[58px_minmax(0,1fr)] sm:gap-2 sm:p-2">
         <AppHeader
           account={account}
-          backendOnline={state.runtime.backendOnline}
+          backendStatus={backendStatus}
           historyOpen={desktopHistoryOpen || historyOpen}
           toolsOpen={desktopToolsOpen || statusOpen}
           onOpenAuth={setAuthMode}
@@ -866,6 +900,7 @@ export function TripWeaverApp() {
             onRemoveAttachment={(attachmentId) =>
               setAttachments((current) => current.filter(({ id }) => id !== attachmentId))
             }
+            onRetry={(messageId) => void retryMessage(messageId)}
             onSend={(message) => void sendMessage(message)}
             onStartVoice={startVoiceInput}
             onStop={() => abortRef.current?.abort()}

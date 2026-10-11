@@ -13,7 +13,7 @@ does not claim that a service is live before Render has deployed it.
 | Flight agent uses a Flight MCP server | Implemented; live proof required after Blueprint sync | `mcp_servers/flight_mcp/server.py` exposes the MCP tool. The same runtime proof must report `flight-mcp=available`. |
 | Tools return normalized, structured data | Met | Provider clients normalize flight, hotel, weather, currency, location, and itinerary payloads. Provider contract tests live under each `mcp_servers/*/tests` directory. |
 | Invalid input and provider failures are handled safely | Met | MCP clients validate airport codes, dates, currency values, and provider responses. Backend and frontend tests cover structured errors and interrupted SSE streams. |
-| Multi-agent state is preserved through a workflow | Met | LangGraph state, trip context, structured results, and tool events are defined and exercised in `backend/agents` and `backend/tests/test_graph.py`. |
+| Multi-agent state is preserved through a workflow | Met | LangGraph state, trip context, structured results, and tool events are defined and exercised in `backend/agents` and `backend/tests/test_graph.py`. Every declared field has a writer: `hotel_results` / `flight_results` are populated from search tool payloads by `extract_search_results`, and `booking_confirmation` by `extract_booking_confirmation`. |
 
 ## Frontend criteria
 
@@ -44,6 +44,23 @@ does not claim that a service is live before Render has deployed it.
 | Durable memory | Partial to met for product history | Account-scoped conversations and plans persist in Postgres. Agent working memory remains request/session scoped rather than a semantic long-term memory system. |
 | Observability | Partial | Structured logs, liveness/readiness, MCP status, and frontend tool events exist. OpenTelemetry/LangSmith traces, metrics, dashboards, and alerting remain future production work. |
 | Real hotel/flight booking | Intentionally partial | Search is live, but confirmation is simulated because SerpApi does not reserve inventory. No claim of a supplier reservation is made. |
+
+## Known free-tier behaviour
+
+Render suspends idle free services. The first request after idle pays a cold
+boot of roughly 20-60 seconds per service. This is a hosting-plan property, not
+a defect in the MCP layer, and it is handled rather than hidden:
+
+- The backend probes all six MCP services concurrently in a background task on
+  startup, so they boot in parallel rather than serially on the first turn.
+- `MCP_HEALTH_TIMEOUT_SECONDS` and `MCP_TOOL_TIMEOUT_SECONDS` budget both the
+  connection and the read, so a sleeping service is reported and treated as
+  slow, not as failed.
+- The circuit breaker still fast-fails a genuinely dead service after three
+  consecutive failures.
+
+Warm every MCP `/health` endpoint a few minutes before an assessment to remove
+the first-turn delay.
 
 ## Booking viva explanation
 

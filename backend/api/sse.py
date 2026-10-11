@@ -142,7 +142,17 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
         return
 
     if kind == "on_tool_start":
-        yield ToolEvent(status="INVOKED", tool=name or "tool")
+        tool_name = name or "tool"
+        # The node-level status above can only say SEARCHING, because the node
+        # starts before the model has picked a tool. Booking is only knowable
+        # here, at dispatch - same "book" test the specialist uses to set
+        # ActivityState.BOOKING (SRS section 6).
+        if "book" in tool_name:
+            yield StatusEvent(
+                state=ActivityState.BOOKING.value,
+                node=event.get("metadata", {}).get("langgraph_node") or tool_name,
+            )
+        yield ToolEvent(status="INVOKED", tool=tool_name)
         return
 
     if kind == "on_tool_end":
@@ -193,7 +203,15 @@ def stream_events_from_graph_event(event: dict[str, Any]) -> Iterable[StreamEven
             yield quick_replies
 
 
-def user_safe_error() -> ErrorEvent:
+def user_safe_error(error: Exception | None = None) -> ErrorEvent:
+    detail = str(error or "").casefold()
+    if "insufficient_quota" in detail or "exceeded your current quota" in detail:
+        return ErrorEvent(
+            message=(
+                "TripWeaver's AI provider quota is unavailable right now. "
+                "Check the OpenAI project billing and usage limits, then try again."
+            )
+        )
     return ErrorEvent(
         message=(
             "Something went wrong on our side. The rest of TripWeaver is "

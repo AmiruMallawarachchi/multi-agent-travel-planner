@@ -187,4 +187,58 @@ describe("stream state", () => {
       },
     })
   })
+
+  it("keeps a partial answer and the failure reason when a stream dies mid-reply", () => {
+    const conversation = createConversation(new Date("2026-07-13T08:00:00.000Z"), "trip")
+    conversation.messages.push({
+      id: "assistant-turn",
+      role: "assistant",
+      content: "",
+      createdAt: "2026-07-13T08:01:00.000Z",
+      tools: [],
+    })
+    let state = {
+      conversation,
+      runtime: createRuntimeState(true, AVAILABLE_SERVICES),
+    }
+
+    state = applyStreamEvent(state, "assistant-turn", {
+      type: "token",
+      content: "The best time to visit is",
+    })
+    state = applyStreamEvent(state, "assistant-turn", {
+      type: "error",
+      message: "The hotel service is unavailable.",
+    })
+
+    // The error used to be dropped whenever any text had already streamed,
+    // leaving a reply that just stopped mid-sentence.
+    expect(state.conversation.messages.at(-1)).toMatchObject({
+      content: "The best time to visit is\n\nThe hotel service is unavailable.",
+      failed: true,
+    })
+    expect(state.runtime.activity).toBe("Request failed")
+  })
+
+  it("still shows the failure reason when nothing streamed at all", () => {
+    const conversation = createConversation(new Date("2026-07-13T08:00:00.000Z"), "trip")
+    conversation.messages.push({
+      id: "assistant-turn",
+      role: "assistant",
+      content: "",
+      createdAt: "2026-07-13T08:01:00.000Z",
+      tools: [],
+    })
+
+    const state = applyStreamEvent(
+      { conversation, runtime: createRuntimeState(true, AVAILABLE_SERVICES) },
+      "assistant-turn",
+      { type: "error", message: "The hotel service is unavailable." },
+    )
+
+    expect(state.conversation.messages.at(-1)).toMatchObject({
+      content: "The hotel service is unavailable.",
+      failed: true,
+    })
+  })
 })

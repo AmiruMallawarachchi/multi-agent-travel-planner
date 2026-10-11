@@ -70,17 +70,25 @@ function ServiceRow({ service }: { service: ServiceState }) {
   )
 }
 
-function ContextValue({ children }: { children: React.ReactNode }) {
-  return <dd className="min-w-0 text-sm font-medium text-foreground">{children || "Not provided"}</dd>
-}
-
 interface StatusPanelProps {
   runtime: RuntimeState
   tripContext: TripContext
+  backendStatus: "waking" | "online" | "offline"
   className?: string
 }
 
-export function StatusPanel({ runtime, tripContext, className }: StatusPanelProps) {
+export function StatusPanel({ runtime, tripContext, backendStatus, className }: StatusPanelProps) {
+  const contextItems = [
+    ["Destination", tripContext.destination],
+    ["Dates", tripContext.dates],
+    ["Travellers", tripContext.travelers],
+    ["Budget", tripContext.budget],
+    ["Preferences", tripContext.preferences.join(", ")],
+  ].filter(([, value]) => Boolean(value))
+  const hasUnavailableService = backendStatus !== "waking" && Object.values(runtime.services).some(
+    ({ status }) => status === "unavailable" || status === "offline",
+  )
+
   return (
     <aside
       className={cn("h-full min-h-0 overflow-y-auto overscroll-contain", className)}
@@ -98,30 +106,46 @@ export function StatusPanel({ runtime, tripContext, className }: StatusPanelProp
         </div>
         <div className="glass-divider border-t pt-2">
           {Object.values(runtime.services).map((service) => (
-            <ServiceRow service={service} key={service.key} />
+            <ServiceRow service={backendStatus === "waking" ? { ...service, status: "running" } : service} key={service.key} />
           ))}
         </div>
+        {backendStatus === "waking" ? (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+            <div className="flex items-center gap-2 font-medium">
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+              Waking the travel services
+            </div>
+            <p className="mt-1">About 60 seconds on the first visit. This page will retry automatically.</p>
+          </div>
+        ) : null}
+        {hasUnavailableService ? (
+          <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+            Some live travel data is temporarily unavailable. You can still ask general questions and use the other services marked available.
+          </p>
+        ) : null}
       </section>
 
-      <Separator />
-
-      <section className="p-3.5" aria-labelledby="trip-context-heading">
-        <h2 id="trip-context-heading" className="mb-4 text-xs font-semibold uppercase">
-          Trip context
-        </h2>
-        <dl className="grid grid-cols-[82px_minmax(0,1fr)] gap-x-3 gap-y-3 text-muted-foreground">
-          <dt className="text-xs">Destination</dt>
-          <ContextValue>{tripContext.destination}</ContextValue>
-          <dt className="text-xs">Dates</dt>
-          <ContextValue>{tripContext.dates}</ContextValue>
-          <dt className="text-xs">Travellers</dt>
-          <ContextValue>{tripContext.travelers}</ContextValue>
-          <dt className="text-xs">Budget</dt>
-          <ContextValue>{tripContext.budget}</ContextValue>
-          <dt className="text-xs">Preferences</dt>
-          <ContextValue>{tripContext.preferences.join(", ")}</ContextValue>
-        </dl>
-      </section>
+      {contextItems.length ? (
+        <>
+          <Separator />
+          <section className="p-3.5" aria-labelledby="trip-context-heading">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 id="trip-context-heading" className="text-xs font-semibold uppercase">
+                Trip context
+              </h2>
+              <span className="text-[10px] text-muted-foreground">From this chat</span>
+            </div>
+            <dl className="grid grid-cols-2 gap-2">
+              {contextItems.map(([label, value]) => (
+                <div className="rounded-lg bg-background/35 px-2.5 py-2" key={label}>
+                  <dt className="text-[10px] uppercase text-muted-foreground">{label}</dt>
+                  <dd className="mt-0.5 truncate text-xs font-medium text-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </>
+      ) : null}
     </aside>
   )
 }

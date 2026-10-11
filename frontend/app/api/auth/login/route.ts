@@ -24,7 +24,12 @@ export async function POST(request: Request) {
 
   if (!response.ok) {
     return NextResponse.json(
-      { detail: responseDetail(body, "The account service is temporarily unavailable") },
+      {
+        detail: responseDetail(
+          body,
+          "We could not reach the account service. Trip planning is still available as a guest; please try signing in again shortly.",
+        ),
+      },
       { status: response.status },
     )
   }

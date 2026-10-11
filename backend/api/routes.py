@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import time
 import uuid
 
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from agents.graph import graph
-from agents.mcp_client import get_server_statuses, tool_runtime_info
+from agents.mcp_client import cached_server_statuses, get_server_statuses, tool_runtime_info
 from api.schemas import (
     AuthResponse,
     ChatRequest,
@@ -72,10 +73,13 @@ async def liveness() -> LivenessResponse:
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    # Return the latest known state immediately. Render free-tier MCP services
+    # can take longer to wake than a Vercel request is allowed to wait.
+    asyncio.create_task(get_server_statuses())
     return HealthResponse(
         status="ok",
         service="tripweaver-backend",
-        mcp_servers=await get_server_statuses(),
+        mcp_servers=cached_server_statuses(),
         account_storage=account_storage_status(),
         tool_runtime=tool_runtime_info(),
     )
@@ -284,11 +288,11 @@ async def chat_stream(
             )
             yield encode_sse(done_event())
 
-        except Exception:  # noqa: BLE001 - conversation failures become user-safe SSE events
+        except Exception as exc:  # noqa: BLE001 - conversation failures become user-safe SSE events
             logger.exception(
                 "request_id=%s session=%s chat_stream failed", request_id, session_id
             )
-            yield encode_sse(user_safe_error())
+            yield encode_sse(user_safe_error(exc))
             yield encode_sse(done_event())
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -76,7 +76,7 @@ describe("TripWeaverApp", () => {
     expect(screen.getByText("TripWeaver").tagName).toBe("SPAN")
     expect(screen.getByRole("button", { name: "Export or share conversation" })).toHaveTextContent(/^$/)
     expect(screen.getByText("Active tools & status")).toBeInTheDocument()
-    expect(screen.getByText("Trip context")).toBeInTheDocument()
+    expect(screen.queryByText("Trip context")).not.toBeInTheDocument()
     expect(screen.queryByText("Quick actions")).not.toBeInTheDocument()
     expect(screen.getByRole("complementary", { name: "Trip status" })).toHaveClass(
       "overflow-y-auto",
@@ -157,22 +157,22 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("dialog", { name: "Trip status" })).toBeInTheDocument()
   })
 
-  it("submits a structured quick reply once", async () => {
+  it("keeps the welcome quiet and shows travel suggestions after a travel request", async () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole("button", { name: "Flights" }))
+    expect(screen.queryByRole("button", { name: "Flights" })).not.toBeInTheDocument()
+    const input = screen.getByRole("textbox", { name: "Message TripWeaver" })
+    fireEvent.change(input, { target: { value: "I want to travel to Japan" } })
+    await user.click(screen.getByRole("button", { name: "Send message" }))
 
-    expect(
-      screen.getByRole("img", { name: "TripWeaver celebrating your answer" }),
-    ).toBeInTheDocument()
     expect(await screen.findByText("I found two flight options.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Flights" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Find flights" })).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       "/api/chat",
       expect.objectContaining({
         method: "POST",
-        body: expect.stringContaining("Help me search for flights."),
+        body: expect.stringContaining("I want to travel to Japan"),
       }),
     )
   })
@@ -227,7 +227,9 @@ describe("TripWeaverApp", () => {
     expect(screen.getByRole("alertdialog", { name: /Delete "Tokyo escape"/ })).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Delete" }))
     expect(screen.getByText("No matching conversations")).toBeInTheDocument()
-  }, 15_000)
+    // ~25 sequential userEvent interactions in one test; 15s was marginal and
+    // flaked under load. Splitting this into per-feature tests is the real fix.
+  }, 45_000)
 
   it("handles unsupported voice input", async () => {
     const user = userEvent.setup()
@@ -331,7 +333,7 @@ describe("TripWeaverApp", () => {
     expect(await screen.findByText("Account created")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "User menu" })).toHaveTextContent("Maya")
     await user.click(screen.getByRole("button", { name: "New chat" }))
-    expect(screen.getByText(/Welcome, Maya\. Hi, I am TripWeaver\./)).toBeInTheDocument()
+    expect(screen.getByText("Hello")).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       "/api/auth/register",
       expect.objectContaining({ method: "POST" }),

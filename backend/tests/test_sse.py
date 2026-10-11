@@ -212,6 +212,39 @@ def test_quick_reply_detection_ignores_statements_and_tool_call_rounds():
     ) == []
 
 
+def test_booking_tool_dispatch_announces_booking_activity():
+    events = list(
+        stream_events_from_graph_event(
+            {
+                "event": "on_tool_start",
+                "name": "book_hotel",
+                "metadata": {"langgraph_node": "hotel"},
+            }
+        )
+    )
+
+    assert events[0] == StatusEvent(state="BOOKING", node="hotel")
+    assert events[1].model_dump() == {
+        "type": "tool",
+        "status": "INVOKED",
+        "tool": "book_hotel",
+    }
+
+
+def test_search_tool_dispatch_does_not_announce_booking():
+    events = list(
+        stream_events_from_graph_event(
+            {
+                "event": "on_tool_start",
+                "name": "search_hotels",
+                "metadata": {"langgraph_node": "hotel"},
+            }
+        )
+    )
+
+    assert [event.type for event in events] == ["tool"]
+
+
 def test_stream_events_from_graph_event_ignores_unknown_events():
     assert list(stream_events_from_graph_event({"event": "not_used"})) == []
 
@@ -220,3 +253,11 @@ def test_user_safe_error_does_not_leak_internal_exception_details():
     event = user_safe_error()
     assert "Something went wrong" in event.message
     assert "Traceback" not in event.message
+
+
+def test_user_safe_error_explains_model_quota_exhaustion():
+    event = user_safe_error(RuntimeError("Error code: 429 insufficient_quota"))
+
+    assert "AI provider quota" in event.message
+    assert "OpenAI" in event.message
+    assert "insufficient_quota" not in event.message

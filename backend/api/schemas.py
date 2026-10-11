@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from core.security import MAX_MESSAGE_LENGTH
+
 
 class LivenessResponse(BaseModel):
     status: Literal["ok"]
@@ -31,7 +33,11 @@ class SessionResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=4000)
+    # Bound to the same constant sanitize_user_message enforces. These were two
+    # independent numbers, so raising the sanitizer's limit changed nothing -
+    # Pydantic rejected the body first, and with a raw validation array rather
+    # than the readable reason the sanitizer produces.
+    message: str = Field(..., min_length=1, max_length=MAX_MESSAGE_LENGTH)
     session_id: str | None = None
 
 

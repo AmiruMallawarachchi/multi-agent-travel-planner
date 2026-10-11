@@ -15,6 +15,7 @@ from agents.llm import get_agent_llm
 from agents.mcp_client import ServerName, get_tools_for
 from agents.tool_results import (
     extract_booking_confirmation,
+    extract_search_results,
     fence_untrusted,
     tool_result_dict,
     tool_result_text,
@@ -68,6 +69,7 @@ async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> di
     tool_records: list = []
     activity = ActivityState.RESPONDING
     booking_confirmation: dict[str, Any] | None = None
+    findings: dict[str, list[dict[str, Any]]] = {}
 
     for _round in range(MAX_TOOL_ROUNDS):
         response = await bound.ainvoke(conversation)
@@ -105,6 +107,12 @@ async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> di
                         if result_data and result_data.get("ok") is False
                         else ToolCallStatus.SUCCEEDED
                     )
+                    searched = extract_search_results(
+                        tool_name=call["name"], raw_result=raw_result
+                    )
+                    if searched:
+                        state_field, rows = searched
+                        findings[state_field] = rows
                     extracted = extract_booking_confirmation(
                         tool_name=call["name"], server=server, raw_result=raw_result
                     )
@@ -147,6 +155,7 @@ async def run_specialist(state: TripWeaverState, config: SpecialistConfig) -> di
         "active_agent": config.agent_name,
         "activity": activity,
         "tool_calls": tool_records,
+        **findings,
     }
     if booking_confirmation is not None:
         result["booking_confirmation"] = booking_confirmation

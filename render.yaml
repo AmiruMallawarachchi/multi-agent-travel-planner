@@ -121,11 +121,13 @@ services:
       - key: RATE_LIMIT_WINDOW_SECONDS
         value: "60"
       - key: MAX_MESSAGE_LENGTH
-        value: "2000"
+        value: "6000"
       - key: TRIPWEAVER_TOOL_MODE
         value: mcp
       - key: MCP_HEALTH_TIMEOUT_SECONDS
-        value: "70"
+        value: "5"
+      - key: MCP_TOOL_TIMEOUT_SECONDS
+        value: "90"
       - key: HOTEL_MCP_HOST
         fromService:
           type: web
