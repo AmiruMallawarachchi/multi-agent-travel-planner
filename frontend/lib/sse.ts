@@ -29,13 +29,19 @@ export function parseSseChunk(buffer: string) {
     const line = part
       .split("\n")
       .map((value) => value.trim())
-      .find((value) => value.startsWith("data: "))
+      .find((value) => value.startsWith("data:"))
 
     if (!line) {
       continue
     }
 
-    events.push(JSON.parse(line.slice(6)) as StreamEvent)
+    try {
+      events.push(JSON.parse(line.slice(5).trim()) as StreamEvent)
+    } catch {
+      // One corrupt frame (a proxy heartbeat, an HTML error page spliced in)
+      // must not abort the rest of the turn's events.
+      continue
+    }
   }
 
   return { events, remainder }

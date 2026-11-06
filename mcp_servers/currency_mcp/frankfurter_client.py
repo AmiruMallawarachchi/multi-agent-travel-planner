@@ -227,14 +227,16 @@ async def get_exchange_rate(
         raise
     rates = payload.get("rates")
     if not isinstance(rates, dict) or quote_currency not in rates:
-        exc = CurrencyProviderError(
-            f"Currency provider did not return a {base_currency}/{quote_currency} rate"
-        )
-        if requested_date is None and _should_try_fallback(exc):
+        # A successful response missing the pair is the same "no rate here"
+        # signal as an HTTP 404, so a latest lookup uses the fallback when the
+        # caller configured one; without one the controlled error stands.
+        if requested_date is None and fallback_client is not None:
             return await _fallback_exchange_rate(
                 base_currency, quote_currency, client=fallback_client
             )
-        raise exc
+        raise CurrencyProviderError(
+            f"Currency provider did not return a {base_currency}/{quote_currency} rate"
+        )
     rate = _number(rates[quote_currency], "exchange rate")
     as_of = str(payload.get("date") or path)
     return {

@@ -67,6 +67,8 @@ async def verify_supabase_google_token(
         payload = response.json()
     except ValueError as exc:
         raise ExternalAuthError("Google sign-in returned an invalid response") from exc
+    if not isinstance(payload, dict):
+        raise ExternalAuthError("Google sign-in returned an invalid response")
 
     app_metadata = payload.get("app_metadata") or {}
     providers = app_metadata.get("providers") or []

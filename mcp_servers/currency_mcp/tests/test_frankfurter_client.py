@@ -130,6 +130,34 @@ async def test_falls_back_for_currency_not_served_by_frankfurter():
 
 
 @pytest.mark.asyncio
+async def test_falls_back_when_latest_response_omits_requested_pair():
+    frankfurter = make_client(
+        lambda _request: httpx.Response(200, json={"base": "USD", "date": "2026-07-10", "rates": {}})
+    )
+    fallback = currency_client.OpenExchangeClient(
+        base_url="https://fallback.test/v6/latest",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "result": "success",
+                    "base_code": "USD",
+                    "time_last_update_utc": "Thu, 16 Jul 2026 00:02:31 +0000",
+                    "rates": {"LKR": 336.158457},
+                },
+            ),
+        ),
+    )
+
+    result = await currency_client.get_exchange_rate(
+        "USD", "LKR", client=frankfurter, fallback_client=fallback
+    )
+
+    assert result["source"] == "ExchangeRate-API open reference rates"
+    assert result["rate"] == 336.158457
+
+
+@pytest.mark.asyncio
 async def test_lists_supported_currencies_in_stable_order():
     transport = httpx.MockTransport(
         lambda _request: httpx.Response(

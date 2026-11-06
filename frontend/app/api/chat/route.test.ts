@@ -34,4 +34,24 @@ describe("POST /api/chat", () => {
       }),
     )
   })
+
+  it("returns a 503 with a readable detail when the backend is unreachable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed")
+      }),
+    )
+    const request = new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Plan Tokyo" }),
+    })
+
+    const response = await POST(request)
+    const body = (await response.json()) as { detail?: string }
+
+    expect(response.status).toBe(503)
+    expect(body.detail).toContain("not reachable")
+  })
 })

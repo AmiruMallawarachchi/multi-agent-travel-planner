@@ -8,6 +8,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
 from agents.graph import graph
@@ -64,6 +65,28 @@ from core.supabase_auth import ExternalAuthError, verify_supabase_google_token
 logger = logging.getLogger("tripweaver")
 router = APIRouter()
 
+_health_probe: asyncio.Task | None = None
+
+
+def _schedule_health_probe() -> None:
+    """Kick off one background MCP status probe at a time.
+
+    Holding the task reference stops asyncio from garbage-collecting it
+    mid-flight, and the single-flight guard stops a hammered /health from
+    fanning out unbounded requests against the MCP tier.
+    """
+    global _health_probe
+    if _health_probe is not None and not _health_probe.done():
+        return
+
+    async def _probe() -> None:
+        try:
+            await get_server_statuses()
+        except Exception:  # noqa: BLE001 - cached statuses keep serving
+            logger.exception("background MCP status probe failed")
+
+    _health_probe = asyncio.create_task(_probe())
+
 
 @router.get("/health/live", response_model=LivenessResponse)
 async def liveness() -> LivenessResponse:
@@ -75,12 +98,12 @@ async def liveness() -> LivenessResponse:
 async def health() -> HealthResponse:
     # Return the latest known state immediately. Render free-tier MCP services
     # can take longer to wake than a Vercel request is allowed to wait.
-    asyncio.create_task(get_server_statuses())
+    _schedule_health_probe()
     return HealthResponse(
         status="ok",
         service="tripweaver-backend",
         mcp_servers=cached_server_statuses(),
-        account_storage=account_storage_status(),
+        account_storage=await run_in_threadpool(account_storage_status),
         tool_runtime=tool_runtime_info(),
     )
 
@@ -103,7 +126,9 @@ async def register(
 ) -> AuthResponse:
     check_rate_limit(client_identity(request, api_key))
     try:
-        token, user = register_user(payload.email, payload.password, payload.name)
+        token, user = await run_in_threadpool(
+            register_user, payload.email, payload.password, payload.name
+        )
     except AccountError as exc:
         raise HTTPException(400, str(exc)) from exc
     return AuthResponse(token=token, user=_user_response(user))
@@ -115,7 +140,9 @@ async def login(
 ) -> AuthResponse:
     check_rate_limit(client_identity(request, api_key))
     try:
-        authenticated = authenticate_user(payload.email, payload.password)
+        authenticated = await run_in_threadpool(
+            authenticate_user, payload.email, payload.password
+        )
     except AccountError as exc:
         raise HTTPException(400, str(exc)) from exc
     if not authenticated:
@@ -133,7 +160,8 @@ async def oauth_login(
     check_rate_limit(client_identity(request, api_key))
     try:
         identity = await verify_supabase_google_token(payload.access_token)
-        token, user = authenticate_external_user(
+        token, user = await run_in_threadpool(
+            authenticate_external_user,
             identity.provider,
             identity.subject,
             identity.email,
@@ -153,7 +181,7 @@ async def logout(
     _: str = Depends(require_api_key),
 ) -> dict[str, bool]:
     if authorization and authorization.startswith("Bearer "):
-        revoke_token(authorization.removeprefix("Bearer ").strip())
+        await run_in_threadpool(revoke_token, authorization.removeprefix("Bearer ").strip())
     return {"ok": True}
 
 
@@ -164,7 +192,8 @@ async def me(user: AccountUser = Depends(require_user)) -> UserResponse:
 
 @router.get("/conversations", response_model=ConversationsResponse)
 async def conversations(user: AccountUser = Depends(require_user)) -> ConversationsResponse:
-    return ConversationsResponse(conversations=list_user_conversations(user.id))
+    conversations = await run_in_threadpool(list_user_conversations, user.id)
+    return ConversationsResponse(conversations=conversations)
 
 
 @router.put("/conversations/{conversation_id}")
@@ -177,7 +206,7 @@ async def save_conversation(
     if conversation.get("id") != conversation_id:
         raise HTTPException(422, "Conversation id does not match route")
     try:
-        saved = upsert_user_conversation(user.id, conversation)
+        saved = await run_in_threadpool(upsert_user_conversation, user.id, conversation)
     except AccountError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"ok": True, "conversation": saved}
@@ -185,7 +214,7 @@ async def save_conversation(
 
 @router.delete("/conversations")
 async def clear_conversations(user: AccountUser = Depends(require_user)) -> dict[str, bool]:
-    clear_user_conversations(user.id)
+    await run_in_threadpool(clear_user_conversations, user.id)
     return {"ok": True}
 
 
@@ -195,7 +224,7 @@ async def delete_conversation(
     user: AccountUser = Depends(require_user),
 ) -> dict[str, bool]:
     try:
-        deleted = delete_user_conversation(user.id, conversation_id)
+        deleted = await run_in_threadpool(delete_user_conversation, user.id, conversation_id)
     except AccountError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"ok": True, "deleted": deleted}
@@ -203,7 +232,8 @@ async def delete_conversation(
 
 @router.get("/plans", response_model=PlansResponse)
 async def plans(user: AccountUser = Depends(require_user)) -> PlansResponse:
-    return PlansResponse(plans=list_user_plans(user.id))
+    plans = await run_in_threadpool(list_user_plans, user.id)
+    return PlansResponse(plans=plans)
 
 
 @router.put("/plans/{plan_id}")
@@ -216,7 +246,7 @@ async def save_plan(
     if plan.get("id") != plan_id:
         raise HTTPException(422, "Plan id does not match route")
     try:
-        saved = upsert_user_plan(user.id, plan)
+        saved = await run_in_threadpool(upsert_user_plan, user.id, plan)
     except AccountError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"ok": True, "plan": saved}
@@ -228,7 +258,7 @@ async def delete_plan(
     user: AccountUser = Depends(require_user),
 ) -> dict[str, bool]:
     try:
-        deleted = delete_user_plan(user.id, plan_id)
+        deleted = await run_in_threadpool(delete_user_plan, user.id, plan_id)
     except AccountError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"ok": True, "deleted": deleted}
@@ -295,4 +325,13 @@ async def chat_stream(
             yield encode_sse(user_safe_error(exc))
             yield encode_sse(done_event())
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            # Proxies must pass tokens through as they are produced, and the
+            # stream must never be cached by an intermediate.
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

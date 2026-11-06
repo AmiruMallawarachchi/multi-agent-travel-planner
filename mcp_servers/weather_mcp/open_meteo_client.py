@@ -121,7 +121,7 @@ def _integer(label: str, value: int, minimum: int, maximum: int) -> int:
         raise InvalidInputError(f"{label} must be between {minimum} and {maximum}")
     try:
         normalized = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise InvalidInputError(
             f"{label} must be between {minimum} and {maximum}"
         ) from None

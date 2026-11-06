@@ -211,7 +211,11 @@ export function AuthDialog({
             ) : null}
           </label>
 
-          {visibleError ? <p className="text-sm text-destructive">{visibleError}</p> : null}
+          {visibleError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {visibleError}
+            </p>
+          ) : null}
 
           <Button
             className="h-11 w-full rounded-xl"

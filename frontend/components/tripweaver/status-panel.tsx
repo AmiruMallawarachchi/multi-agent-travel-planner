@@ -102,7 +102,17 @@ export function StatusPanel({ runtime, tripContext, backendStatus, className }: 
             </h2>
             <p className="mt-1 truncate text-xs text-muted-foreground">{runtime.activeAgent}</p>
           </div>
-          <span className="mt-0.5 size-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" aria-hidden="true" />
+          <span
+            className={cn(
+              "mt-0.5 size-2.5 rounded-full",
+              backendStatus === "online"
+                ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]"
+                : backendStatus === "waking"
+                  ? "bg-amber-500"
+                  : "bg-rose-500",
+            )}
+            aria-hidden="true"
+          />
         </div>
         <div className="glass-divider border-t pt-2">
           {Object.values(runtime.services).map((service) => (

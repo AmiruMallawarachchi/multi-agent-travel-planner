@@ -36,4 +36,21 @@ describe("parseSseChunk", () => {
       },
     ])
   })
+
+  it("accepts data frames without a space after the colon", () => {
+    const result = parseSseChunk('data:{"type":"done"}\n\n')
+
+    expect(result.events).toEqual([{ type: "done" }])
+  })
+
+  it("skips a corrupt frame and keeps parsing the rest", () => {
+    const result = parseSseChunk(
+      'data: {"type":"token","content":"Hi"}\n\ndata: <html>bad gateway</html>\n\ndata: {"type":"done"}\n\n',
+    )
+
+    expect(result.events).toEqual([
+      { type: "token", content: "Hi" },
+      { type: "done" },
+    ])
+  })
 })

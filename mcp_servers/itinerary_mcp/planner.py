@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from typing import Any
 
@@ -43,7 +44,7 @@ def _integer(label: str, value: int, minimum: int, maximum: int) -> int:
         raise InvalidInputError(f"{label} must be between {minimum} and {maximum}")
     try:
         normalized = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise InvalidInputError(
             f"{label} must be between {minimum} and {maximum}"
         ) from None
@@ -63,6 +64,8 @@ def _budget(value: float | None) -> float | None:
         normalized = float(value)
     except (TypeError, ValueError):
         raise InvalidInputError("budget must be greater than zero") from None
+    if not math.isfinite(normalized):
+        raise InvalidInputError("budget must be greater than zero and reasonable")
     if normalized <= 0 or normalized > 1_000_000_000:
         raise InvalidInputError("budget must be greater than zero and reasonable")
     return round(normalized, 2)
@@ -84,6 +87,12 @@ def _interests(values: list[str] | None) -> list[str]:
 def _coordinates(raw: dict[str, Any]) -> dict[str, float] | None:
     latitude = raw.get("latitude")
     longitude = raw.get("longitude")
+    if latitude is None and longitude is None:
+        # location-mcp search_places emits {"coordinates": {latitude, longitude}}.
+        nested = raw.get("coordinates")
+        if isinstance(nested, dict):
+            latitude = nested.get("latitude")
+            longitude = nested.get("longitude")
     if latitude is None and longitude is None:
         return None
     if latitude is None or longitude is None:

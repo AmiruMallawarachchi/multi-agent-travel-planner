@@ -17,6 +17,7 @@ not, e.g. this is single-instance rate limiting, not a WAF).
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import time
@@ -58,7 +59,10 @@ _hits: dict[str, deque] = defaultdict(deque)
 
 def client_identity(request: Request, api_key: str) -> str:
     if api_key != "anonymous":
-        return f"key:{api_key}"
+        # Identity ends up in request logs and as a rate-limiter map key, so
+        # it must never be the live API key itself.
+        digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:12]
+        return f"key:{digest}"
     return f"ip:{request.client.host if request.client else 'unknown'}"
 
 

@@ -181,8 +181,8 @@ function WeatherPreview({ data }: { data: unknown }) {
       </div>
       {daily.length ? (
         <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-xs">
-          {daily.map((day) => (
-            <div className="min-w-0 rounded-md bg-background/40 px-2 py-2" key={text(day.date)}>
+          {daily.map((day, index) => (
+            <div className="min-w-0 rounded-md bg-background/40 px-2 py-2" key={`${text(day.date, "day")}-${index}`}>
               <p className="truncate font-medium">{text(day.date)}</p>
               <p className="truncate text-muted-foreground">{text(day.weather)}</p>
               <p>{displayNumber(day.temperature_max)} / {displayNumber(day.temperature_min)}</p>
