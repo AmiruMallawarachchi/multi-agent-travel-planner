@@ -177,6 +177,8 @@ export function TripWeaverApp() {
   const [account, setAccount] = useState<AccountUser | null>(null)
   const hydratedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  const streamingRef = useRef(false)
+  const accountWorkspaceLoadedRef = useRef(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
 
   const activeConversation =
@@ -198,13 +200,24 @@ export function TripWeaverApp() {
       cloudConversations.length > 0
         ? cloudConversations
         : [createConversation(new Date(), undefined, travellerName)]
-    setState((current) => ({
-      ...current,
-      conversations: accountConversations,
-      plans: cloudPlans,
-      activeConversationId: accountConversations[0].id,
-      runtime: resetRuntimeState(current.runtime),
-    }))
+    setState((current) => {
+      // Keep guest chats the traveller started before signing in. Replacing
+      // outright raced the debounced cloud sync below and silently dropped
+      // them whenever the fetch resolved first.
+      const cloudIds = new Set(accountConversations.map(({ id }) => id))
+      const promoted = current.conversations.filter(
+        (conversation) => hasUserMessage(conversation) && !cloudIds.has(conversation.id),
+      )
+      const conversations = [...promoted, ...accountConversations]
+      return {
+        ...current,
+        conversations,
+        plans: cloudPlans,
+        activeConversationId: conversations[0].id,
+        runtime: resetRuntimeState(current.runtime),
+      }
+    })
+    accountWorkspaceLoadedRef.current = true
   }, [])
 
   const refreshAccount = useCallback(async () => {
@@ -293,7 +306,9 @@ export function TripWeaverApp() {
   }, [settings, state.conversations, state.plans])
 
   useEffect(() => {
-    if (!hydratedRef.current || !account) return
+    // Only sync after the cloud workspace has loaded, so the guest list is
+    // never PUT over the freshly fetched account history mid-sign-in.
+    if (!hydratedRef.current || !account || !accountWorkspaceLoadedRef.current) return
     const timeout = window.setTimeout(() => {
       state.conversations
         .filter(hasUserMessage)
@@ -305,48 +320,69 @@ export function TripWeaverApp() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let inFlight = false
+    let everOnline = false
+    let failedRounds = 0
+
+    async function probeOnce(): Promise<boolean> {
+      try {
+        const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
+        const health = (await response.json()) as {
+          backend?: string
+          online?: boolean
+          mcp_servers?: McpServerStatuses
+        }
+        if (response.ok && health.online === true && health.backend === "online") {
+          everOnline = true
+          failedRounds = 0
+          setBackendStatus("online")
+          setState((current) => ({
+            ...current,
+            runtime: setBackendAvailability(current.runtime, true, health.mcp_servers ?? {}),
+          }))
+          return true
+        }
+      } catch {
+        // A thrown probe (cold start, proxy timeout) is just a failed round.
+      }
+      return false
+    }
 
     async function checkBackend() {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          const response = await fetch("/api/health", { cache: "no-store", signal: controller.signal })
-          const health = (await response.json()) as {
-            backend?: string
-            online?: boolean
-            mcp_servers?: McpServerStatuses
-          }
-          const online = response.ok && health.online === true && health.backend === "online"
-          if (online) {
-            setBackendStatus("online")
-            setState((current) => ({
-              ...current,
-              runtime: setBackendAvailability(current.runtime, true, health.mcp_servers ?? {}),
-            }))
-            return
-          }
-        } catch {
+      if (inFlight) return
+      inFlight = true
+      try {
+        // Retry quickly at start-up so a waking backend is not mislabelled.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (await probeOnce()) return
           if (controller.signal.aborted) return
+          if (attempt < 2) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
+          }
         }
-
-        if (attempt < 2) {
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
+        failedRounds += 1
+        // Demote only after sustained silence so one bad poll during a
+        // Render cold start does not flicker the header badge.
+        if (everOnline && failedRounds >= 6) {
+          setBackendStatus("offline")
+          setState((current) => ({ ...current, runtime: setBackendAvailability(current.runtime, false) }))
         }
+      } finally {
+        inFlight = false
       }
-
     }
 
     void checkBackend()
     const healthInterval = window.setInterval(() => void checkBackend(), 5_000)
-    const offlineTimeout = window.setTimeout(() => {
-      setBackendStatus((current) => {
-        if (current === "online") return current
-        setState((state) => ({ ...state, runtime: setBackendAvailability(state.runtime, false) }))
-        return "offline"
-      })
+    // Never reached "online" within the cold-start budget: it is offline.
+    const wakingDeadline = window.setTimeout(() => {
+      if (everOnline) return
+      setBackendStatus("offline")
+      setState((current) => ({ ...current, runtime: setBackendAvailability(current.runtime, false) }))
     }, 90_000)
     return () => {
       window.clearInterval(healthInterval)
-      window.clearTimeout(offlineTimeout)
+      window.clearTimeout(wakingDeadline)
       controller.abort()
     }
   }, [])
@@ -361,6 +397,8 @@ export function TripWeaverApp() {
 
   function startNewChat() {
     abortRef.current?.abort()
+    abortRef.current = null
+    streamingRef.current = false
     recognitionRef.current?.stop()
     const conversation = createConversation(new Date(), undefined, account?.name)
     setState((current) => ({
@@ -377,6 +415,8 @@ export function TripWeaverApp() {
 
   function clearConversations() {
     abortRef.current?.abort()
+    abortRef.current = null
+    streamingRef.current = false
     const conversation = createConversation(new Date(), undefined, account?.name)
     window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY)
     if (account) {
@@ -459,6 +499,8 @@ export function TripWeaverApp() {
 
   async function signOut() {
     abortRef.current?.abort()
+    abortRef.current = null
+    streamingRef.current = false
     recognitionRef.current?.stop()
     await fetch("/api/auth/logout", { method: "POST" })
     if (
@@ -468,6 +510,7 @@ export function TripWeaverApp() {
       await createSupabaseClient().auth.signOut({ scope: "local" })
     }
     setAccount(null)
+    accountWorkspaceLoadedRef.current = false
     setState(createInitialState())
     setInput("")
     setAttachments([])
@@ -526,14 +569,17 @@ export function TripWeaverApp() {
         conversations: current.conversations.map((item) =>
           item.id === conversationId ? next.conversation : item,
         ),
-        runtime: next.runtime,
+        // The runtime panel describes the visible conversation. A background
+        // stream finishing in another chat must not repaint this one's status.
+        runtime: conversationId === current.activeConversationId ? next.runtime : current.runtime,
       }
     })
   }
 
   async function sendMessage(value = input) {
     const content = value.trim() || (attachments.length ? "Please use the attached files for this trip." : "")
-    if (!content || isStreaming || !activeConversation) return
+    if (!content || streamingRef.current || !activeConversation) return
+    streamingRef.current = true
 
     const now = new Date().toISOString()
     const conversationId = activeConversation.id
@@ -612,6 +658,13 @@ export function TripWeaverApp() {
         buffer = parsed.remainder
         parsed.events.forEach((event) => applyEvent(conversationId, assistantMessageId, event))
       }
+
+      // A proxy can truncate the final blank line; the tail still holds real
+      // events (often `done`) that would otherwise be silently discarded.
+      if (buffer.trim()) {
+        const tail = parseSseChunk(`${buffer}\n\n`)
+        tail.events.forEach((event) => applyEvent(conversationId, assistantMessageId, event))
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         applyEvent(conversationId, assistantMessageId, {
@@ -628,8 +681,13 @@ export function TripWeaverApp() {
         toast.error(message)
       }
     } finally {
-      setIsStreaming(false)
-      abortRef.current = null
+      // Only the newest stream may clear the shared flags; an aborted
+      // predecessor must not switch off its replacement's streaming state.
+      if (abortRef.current === controller) {
+        abortRef.current = null
+        streamingRef.current = false
+        setIsStreaming(false)
+      }
     }
   }
 
@@ -637,7 +695,7 @@ export function TripWeaverApp() {
    * Re-running the same prompt is what the traveller wants after a transient
    * MCP failure, and it beats making them retype it. */
   function retryMessage(assistantMessageId: string) {
-    if (isStreaming || !activeConversation) return
+    if (streamingRef.current || !activeConversation) return
 
     const messages = activeConversation.messages
     const failedIndex = messages.findIndex(({ id }) => id === assistantMessageId)

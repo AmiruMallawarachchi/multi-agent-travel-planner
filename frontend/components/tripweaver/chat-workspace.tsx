@@ -182,6 +182,7 @@ function MessageBubble({
   message,
   showToolActivity,
   account,
+  isThinking,
   onOpenItinerary,
   onQuickReply,
   onRetry,
@@ -190,6 +191,7 @@ function MessageBubble({
   message: ChatMessage
   showToolActivity: boolean
   account: AccountUser | null
+  isThinking: boolean
   onOpenItinerary: (message: ChatMessage, result?: StructuredResult) => void
   onQuickReply: (messageId: string, value: string) => void
   onRetry: (messageId: string) => void
@@ -236,12 +238,12 @@ function MessageBubble({
         >
           {message.content ? (
             <Markdown>{message.content}</Markdown>
-          ) : (
+          ) : isThinking ? (
             <span className="inline-flex items-center gap-2 text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
               Planning your trip...
             </span>
-          )}
+          ) : null}
 
           {!isUser && message.results?.length
             ? message.results.map((result, index) => (
@@ -479,12 +481,13 @@ export function ChatWorkspace({
         }}
       >
         <div className="mx-auto flex w-full max-w-[900px] flex-col gap-3.5">
-          {conversation.messages.map((message) => (
+          {conversation.messages.map((message, index) => (
             <MessageBubble
               key={message.id}
               account={account}
               message={message}
               showToolActivity={showToolActivity}
+              isThinking={isStreaming && index === conversation.messages.length - 1}
               onOpenItinerary={(selectedMessage, result) =>
                 setItinerarySelection({ message: selectedMessage, result })
               }
