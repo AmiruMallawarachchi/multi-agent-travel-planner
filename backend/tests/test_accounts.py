@@ -26,6 +26,35 @@ def _register(client: TestClient, email: str = "traveller@example.com") -> dict:
     return response.json()
 
 
+def test_session_closes_the_connection_it_opened(monkeypatch):
+    class RecordingConnection:
+        def __init__(self) -> None:
+            self.committed = False
+            self.closed = False
+
+        def __enter__(self) -> "RecordingConnection":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            self.committed = exc_type is None
+            return False
+
+        def commit(self) -> None:
+            pass
+
+        def close(self) -> None:
+            self.closed = True
+
+    connection = RecordingConnection()
+    monkeypatch.setattr(accounts, "_connect", lambda: connection)
+
+    with accounts._session() as active:
+        assert active is connection
+
+    assert connection.committed
+    assert connection.closed
+
+
 def test_register_login_me_and_logout(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
 

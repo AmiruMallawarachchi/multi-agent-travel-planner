@@ -16,10 +16,11 @@ import re
 import secrets
 import sqlite3
 import uuid
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 from urllib.parse import urlparse
 
 from fastapi import Header, HTTPException, status
@@ -118,11 +119,22 @@ def _connect() -> _Connection:
     return connection
 
 
+@contextmanager
+def _session() -> Iterator[_Connection]:
+    """Commit on success, roll back on failure, and always close the connection.
+
+    A DB connection's own context manager only commits or rolls back, so an
+    unclosed connection would leak one file handle per request.
+    """
+    with closing(_connect()) as connection, connection:
+        yield connection
+
+
 def account_storage_status() -> dict[str, str]:
     """Return a sanitized health summary for account persistence."""
     backend = "postgres" if _uses_postgres() else "sqlite"
     try:
-        with _connect() as connection:
+        with _session() as connection:
             connection.execute(_sql("SELECT 1"))
         return {"backend": backend, "status": "available"}
     except Exception:  # noqa: BLE001 - health must not leak connection details
@@ -264,6 +276,14 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+# Hashing a real-looking constant when the email is unknown keeps unknown and
+# known accounts indistinguishable by response time.
+_UNKNOWN_USER_HASH = (
+    "pbkdf2_sha256$210000$GOYj2dQVpcOsbdN9WWepGA$"
+    "Tt4skvKYV0-jqVld5oNjp3q14SsTiS0xjbReGcla8lU"
+)
+
+
 def _row_value(row: sqlite3.Row | dict[str, Any], key: str, default: Any = None) -> Any:
     try:
         return row[key]
@@ -308,7 +328,7 @@ def register_user(email: str, password: str, name: str | None = None) -> tuple[s
     now = _utc_now().isoformat()
     user_id = uuid.uuid4().hex
 
-    with _connect() as connection:
+    with _session() as connection:
         try:
             connection.execute(
                 _sql(
@@ -342,11 +362,12 @@ def register_user(email: str, password: str, name: str | None = None) -> tuple[s
 
 def authenticate_user(email: str, password: str) -> tuple[str, AccountUser] | None:
     normalized_email = _normalize_email(email)
-    with _connect() as connection:
+    with _session() as connection:
         row = connection.execute(
             _sql("SELECT * FROM users WHERE email = ?"), (normalized_email,)
         ).fetchone()
-        if not row or not _verify_password(password, row["password_hash"]):
+        stored_hash = row["password_hash"] if row else _UNKNOWN_USER_HASH
+        if not _verify_password(password, stored_hash):
             return None
         token = _create_session(connection, row["id"])
         connection.commit()
@@ -372,7 +393,7 @@ def authenticate_external_user(
     normalized_avatar_url = _normalize_avatar_url(avatar_url)
     now = _utc_now().isoformat()
 
-    with _connect() as connection:
+    with _session() as connection:
         row = connection.execute(
             _sql(
                 """
@@ -440,7 +461,7 @@ def authenticate_external_user(
 
 
 def user_from_token(token: str) -> AccountUser | None:
-    with _connect() as connection:
+    with _session() as connection:
         row = connection.execute(
             _sql(
             """
@@ -456,7 +477,7 @@ def user_from_token(token: str) -> AccountUser | None:
 
 
 def revoke_token(token: str) -> None:
-    with _connect() as connection:
+    with _session() as connection:
         connection.execute(
             _sql("DELETE FROM auth_sessions WHERE token_hash = ?"),
             (_hash_token(token),),
@@ -475,7 +496,7 @@ async def require_user(authorization: str | None = Header(default=None)) -> Acco
 
 
 def list_user_conversations(user_id: str) -> list[dict[str, Any]]:
-    with _connect() as connection:
+    with _session() as connection:
         rows = connection.execute(
             _sql(
             """
@@ -499,7 +520,7 @@ def upsert_user_conversation(user_id: str, payload: dict[str, Any]) -> dict[str,
         raise AccountError("Conversation id is required")
 
     serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    with _connect() as connection:
+    with _session() as connection:
         connection.execute(
             _sql(
             """
@@ -518,7 +539,7 @@ def upsert_user_conversation(user_id: str, payload: dict[str, Any]) -> dict[str,
 
 
 def clear_user_conversations(user_id: str) -> None:
-    with _connect() as connection:
+    with _session() as connection:
         connection.execute(
             _sql("DELETE FROM conversations WHERE user_id = ?"), (user_id,)
         )
@@ -529,7 +550,7 @@ def delete_user_conversation(user_id: str, conversation_id: str) -> bool:
     normalized_id = conversation_id.strip()
     if not normalized_id or len(normalized_id) > 128:
         raise AccountError("Conversation id is required")
-    with _connect() as connection:
+    with _session() as connection:
         cursor = connection.execute(
             _sql("DELETE FROM conversations WHERE user_id = ? AND id = ?"),
             (user_id, normalized_id),
@@ -539,7 +560,7 @@ def delete_user_conversation(user_id: str, conversation_id: str) -> bool:
 
 
 def list_user_plans(user_id: str) -> list[dict[str, Any]]:
-    with _connect() as connection:
+    with _session() as connection:
         rows = connection.execute(
             _sql(
             """
@@ -574,7 +595,7 @@ def upsert_user_plan(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "updatedAt": updated_at,
     }
     serialized = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
-    with _connect() as connection:
+    with _session() as connection:
         connection.execute(
             _sql(
             """
@@ -597,7 +618,7 @@ def delete_user_plan(user_id: str, plan_id: str) -> bool:
     if not normalized_id or len(normalized_id) > 128:
         raise AccountError("Plan id is required")
 
-    with _connect() as connection:
+    with _session() as connection:
         cursor = connection.execute(
             _sql("DELETE FROM plans WHERE user_id = ? AND id = ?"),
             (user_id, normalized_id),
