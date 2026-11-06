@@ -97,8 +97,10 @@ def test_overflow_activities_are_returned_instead_of_silently_dropped():
         ({"end_date": "2027-03-31"}, "on or after start_date"),
         ({"end_date": "2027-05-10"}, "21 days"),
         ({"travelers": 0}, "travelers must be between"),
+        ({"travelers": float("inf")}, "travelers must be between"),
         ({"pace": "rushed"}, "pace must be one of"),
         ({"budget": 0}, "budget must be greater"),
+        ({"budget": float("nan")}, "budget must be greater"),
         ({"activities": [{"name": ""}]}, "activity name"),
     ],
 )
@@ -117,3 +119,22 @@ def test_rejects_invalid_plan_inputs(overrides: dict, message: str):
 
     with pytest.raises(planner.InvalidInputError, match=message):
         planner.create_itinerary_plan(**arguments)
+
+
+def test_accepts_nested_place_coordinates_from_location_search():
+    result = planner.create_itinerary_plan(
+        destination="Kyoto",
+        start_date="2027-04-10",
+        end_date="2027-04-11",
+        activities=[
+            {
+                "name": "Fushimi Inari Taisha",
+                "category": "attraction",
+                "duration_minutes": 120,
+                "coordinates": {"latitude": 34.9671, "longitude": 135.7727},
+            },
+        ],
+    )
+
+    item = result["days"][0]["items"][0]
+    assert item["coordinates"] == {"latitude": 34.9671, "longitude": 135.7727}

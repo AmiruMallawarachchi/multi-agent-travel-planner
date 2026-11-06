@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from open_meteo_client import (
     InvalidInputError,
+    LocationNotFoundError,
     WeatherProviderError,
     get_weather_forecast as fetch_weather_forecast,
 )
@@ -30,6 +31,9 @@ async def _weather_result(**arguments: Any) -> dict[str, Any]:
         weather = await fetch_weather_forecast(**arguments)
         return {"ok": True, "weather": weather}
     except InvalidInputError as exc:
+        return {"ok": False, "error": str(exc)}
+    except LocationNotFoundError as exc:
+        # A typo'd place name must not be reported as a service outage.
         return {"ok": False, "error": str(exc)}
     except WeatherProviderError as exc:
         return {"ok": False, "error": f"Weather service unavailable: {exc}"}

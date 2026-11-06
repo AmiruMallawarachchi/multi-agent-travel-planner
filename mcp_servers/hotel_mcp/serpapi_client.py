@@ -125,7 +125,7 @@ def _validate_integer(label: str, value: int, minimum: int, maximum: int) -> int
         raise InvalidInputError(f"{label} must be between {minimum} and {maximum}")
     try:
         normalized = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise InvalidInputError(
             f"{label} must be between {minimum} and {maximum}"
         ) from None
@@ -150,7 +150,7 @@ def _validate_optional_price(label: str, value: int | None) -> int | None:
         raise InvalidInputError(f"{label} must be greater than zero")
     try:
         normalized = int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise InvalidInputError(f"{label} must be greater than zero") from None
     if isinstance(value, float) and not value.is_integer():
         raise InvalidInputError(f"{label} must be greater than zero")
