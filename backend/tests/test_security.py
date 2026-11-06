@@ -6,7 +6,7 @@ and session-id primitives that sit in front of every billable endpoint.
 from __future__ import annotations
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from core import security
 
@@ -44,6 +44,24 @@ class TestSessionIds:
     def test_rejects_anything_that_is_not_a_bare_uuid4_hex(self, bad_id):
         with pytest.raises(ValueError):
             security.validate_session_id(bad_id)
+
+
+class TestClientIdentity:
+    def test_api_key_is_never_used_as_the_identity(self):
+        request = Request({"type": "http", "headers": [], "client": ("10.0.0.1", 5000)})
+        identity = security.client_identity(request, "secret-key-for-web")
+        assert "secret-key-for-web" not in identity
+        assert identity == security.client_identity(request, "secret-key-for-web")
+
+    def test_distinct_api_keys_get_distinct_identities(self):
+        request = Request({"type": "http", "headers": [], "client": ("10.0.0.1", 5000)})
+        assert security.client_identity(request, "key-a") != security.client_identity(
+            request, "key-b"
+        )
+
+    def test_anonymous_requests_are_bucketed_by_ip(self):
+        request = Request({"type": "http", "headers": [], "client": ("10.0.0.1", 5000)})
+        assert security.client_identity(request, "anonymous") == "ip:10.0.0.1"
 
 
 class TestRateLimiting:

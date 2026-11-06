@@ -65,6 +65,18 @@ async def test_rejects_non_google_or_unverified_identity(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_rejects_a_json_body_that_is_not_an_object(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "publishable-key")
+
+    async with _client(
+        lambda _request: httpx.Response(200, json=["unexpected", "list"])
+    ) as client:
+        with pytest.raises(ExternalAuthError, match="invalid response"):
+            await verify_supabase_google_token("private-access-token", client=client)
+
+
+@pytest.mark.asyncio
 async def test_reports_missing_configuration_as_unavailable(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_PUBLISHABLE_KEY", raising=False)

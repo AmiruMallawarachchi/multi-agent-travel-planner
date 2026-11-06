@@ -49,7 +49,7 @@ def create_app(app_settings: Settings = settings) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
-        allow_methods=["POST", "GET"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
     app.include_router(router)
